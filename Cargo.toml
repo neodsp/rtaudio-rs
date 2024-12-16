@@ -25,7 +25,7 @@ wasapi = ["rtaudio-sys/wasapi"]
 ds = ["rtaudio-sys/ds"]
 
 [dependencies]
-rtaudio-sys = { version = "0.3.3", default-features = false }
+rtaudio-sys = { git = "https://github.com/neodsp/rtaudio-sys", default-features = false }
 bitflags = "2.3"
 lazy_static = "1.4"
 log = "0.4"
