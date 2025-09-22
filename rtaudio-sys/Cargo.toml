@@ -1,11 +1,11 @@
 [package]
 name = "rtaudio-sys"
-version = "0.3.5"
+version = "0.3.6"
 edition = "2021"
-authors = ["Billy Messenger <60663878+BillyDM@users.noreply.github.com>"]
+authors = ["Billy Messenger <billydm@noreply.codeberg.org>"]
 description = "Raw bindings for RtAudio"
 license = "MIT"
-repository = "https://github.com/MeadowlarkDAW/rtaudio-rs"
+repository = "https://codeberg.org/Meadowlark/rtaudio-rs"
 readme = "README.md"
 keywords = ["audio", "sound", "rtaudio"]
 categories = ["multimedia::audio", "external-ffi-bindings"]
