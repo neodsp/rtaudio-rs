@@ -1,6 +1,6 @@
 [package]
 name = "rtaudio"
-version = "0.3.6"
+version = "0.3.7"
 edition = "2021"
 authors = ["Billy Messenger <billydm@noreply.codeberg.org>"]
 description = "Safe Rust wrapper and bindings for RtAudio"
@@ -23,6 +23,7 @@ oss = ["rtaudio-sys/oss"]
 asio = ["rtaudio-sys/asio"]
 wasapi = ["rtaudio-sys/wasapi"]
 ds = ["rtaudio-sys/ds"]
+serde = ["dep:serde", "bitflags/serde"]
 
 [workspace]
 members = [
@@ -31,6 +32,7 @@ members = [
 
 [dependencies]
 rtaudio-sys = { path = "rtaudio-sys", version = "0.3.6", default-features = false }
-bitflags = "2.3"
-lazy_static = "1.4"
+bitflags = "2.10"
+lazy_static = "1.5"
 log = "0.4"
+serde = { version = "1", features = ["derive"], optional = true }

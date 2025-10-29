@@ -8,6 +8,7 @@ use crate::{DeviceID, StreamFlags};
 /// Used for specifying the parameters of a device when opening a
 /// stream.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DeviceParams {
     /// The ID (not index) of the device to use.
     pub device_id: DeviceID,
@@ -39,6 +40,7 @@ impl DeviceParams {
 
 /// Additional options for opening a stream.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct StreamOptions {
     /// The bit flag parameters for this stream.
     ///

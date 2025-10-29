@@ -8,6 +8,7 @@ use crate::{Buffers, DeviceParams, Host, SampleFormat, StreamFlags, StreamOption
 
 /// Information about a running RtAudio stream.
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct StreamInfo {
     /// The number of output audio channels.
     pub out_channels: usize,

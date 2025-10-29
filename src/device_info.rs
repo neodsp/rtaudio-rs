@@ -4,10 +4,12 @@ use crate::NativeFormats;
 
 /// A unique identifier for a device.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DeviceID(pub u32);
 
 /// Queried information about a device.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DeviceInfo {
     /// The unique identifier of this device.
     pub id: DeviceID,

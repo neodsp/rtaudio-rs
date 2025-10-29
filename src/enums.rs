@@ -15,6 +15,7 @@ bitflags! {
     /// automatically convert to/from the best native format.
     #[repr(C)]
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct NativeFormats: rtaudio_sys::rtaudio_format_t {
         /// 8-bit signed integer.
         const SINT8 = rtaudio_sys::RTAUDIO_FORMAT_SINT8;
@@ -40,6 +41,7 @@ bitflags! {
 /// definitions.
 #[repr(usize)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SampleFormat {
     /// 8-bit signed integer.
     SInt8 = rtaudio_sys::RTAUDIO_FORMAT_SINT8 as usize,
@@ -80,6 +82,7 @@ bitflags! {
     /// Stream option flags.
     #[repr(C)]
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct StreamFlags: rtaudio_sys::rtaudio_stream_flags_t {
         /// Use non-interleaved buffers (default = interleaved).
         const NONINTERLEAVED = rtaudio_sys::RTAUDIO_FLAGS_NONINTERLEAVED;
@@ -104,6 +107,7 @@ bitflags! {
     /// Stream status (over- or underflow) flags.
     #[repr(C)]
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct StreamStatus: rtaudio_sys::rtaudio_stream_status_t {
         /// Input data was discarded because of an overflow condition at the driver.
         const INPUT_OVERFLOW = rtaudio_sys::RTAUDIO_STATUS_INPUT_OVERFLOW;
@@ -114,6 +118,7 @@ bitflags! {
 
 #[repr(i32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Api {
     /// Search for a default working compiled API.
     Unspecified = rtaudio_sys::RTAUDIO_API_UNSPECIFIED as i32,

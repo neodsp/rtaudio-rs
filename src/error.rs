@@ -4,6 +4,7 @@ use std::fmt;
 use std::os::raw::c_char;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RtAudioError {
     pub type_: RtAudioErrorType,
     pub msg: Option<String>,
@@ -11,6 +12,7 @@ pub struct RtAudioError {
 
 #[repr(i32)]
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RtAudioErrorType {
     /// A non-critical error.
     Warning = rtaudio_sys::RTAUDIO_ERROR_WARNING as i32,
