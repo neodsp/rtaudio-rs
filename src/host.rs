@@ -2,6 +2,11 @@ use crate::error::{RtAudioError, RtAudioErrorType};
 use crate::{Api, DeviceID, DeviceInfo, DeviceParams, SampleFormat, StreamHandle, StreamOptions};
 use std::os::raw::{c_int, c_uint};
 
+#[cfg(all(feature = "log", not(feature = "tracing")))]
+use log::warn;
+#[cfg(feature = "tracing")]
+use tracing::warn;
+
 /// An RtAudio Host instance. This is used to enumerate audio devices before
 /// opening a stream.
 #[derive(Debug)]
@@ -106,7 +111,8 @@ impl Host {
         self.iter_devices_complete().filter_map(|d| match d {
             Ok(d) => Some(d),
             Err(e) => {
-                log::warn!("{}", e);
+                #[cfg(any(feature = "tracing", feature = "log"))]
+                warn!("{}", e);
 
                 None
             }
@@ -127,7 +133,8 @@ impl Host {
                 }
             }
             Err(e) => {
-                log::warn!("{}", e);
+                #[cfg(any(feature = "tracing", feature = "log"))]
+                warn!("{}", e);
 
                 None
             }
@@ -148,7 +155,8 @@ impl Host {
                 }
             }
             Err(e) => {
-                log::warn!("{}", e);
+                #[cfg(any(feature = "tracing", feature = "log"))]
+                warn!("{}", e);
 
                 None
             }
@@ -169,7 +177,8 @@ impl Host {
                 }
             }
             Err(e) => {
-                log::warn!("{}", e);
+                #[cfg(any(feature = "tracing", feature = "log"))]
+                warn!("{}", e);
 
                 None
             }

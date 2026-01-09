@@ -2,6 +2,11 @@ use std::ffi::CStr;
 
 use crate::NativeFormats;
 
+#[cfg(all(feature = "log", not(feature = "tracing")))]
+use log::error;
+#[cfg(feature = "tracing")]
+use tracing::error;
+
 /// A unique identifier for a device.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -59,7 +64,8 @@ impl DeviceInfo {
         let name = match CStr::from_bytes_until_nul(&name_slice) {
             Ok(n) => n.to_string_lossy().to_string(),
             Err(e) => {
-                log::error!("RtAudio: Failed to parse audio device name: {}", e);
+                #[cfg(any(feature = "tracing", feature = "log"))]
+                error!("RtAudio: Failed to parse audio device name: {}", e);
 
                 String::from("error")
             }

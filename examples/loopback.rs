@@ -1,6 +1,13 @@
 use rtaudio::{Api, Buffers, DeviceParams, SampleFormat, StreamInfo, StreamOptions, StreamStatus};
 
 fn main() {
+    tracing::subscriber::set_global_default(
+        tracing_subscriber::FmtSubscriber::builder()
+            .with_max_level(tracing::Level::DEBUG)
+            .finish(),
+    )
+    .unwrap();
+
     let host = rtaudio::Host::new(Api::Unspecified).unwrap();
     dbg!(host.api());
 

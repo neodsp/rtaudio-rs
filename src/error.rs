@@ -3,6 +3,11 @@ use std::ffi::CStr;
 use std::fmt;
 use std::os::raw::c_char;
 
+#[cfg(all(feature = "log", not(feature = "tracing")))]
+use log::warn;
+#[cfg(feature = "tracing")]
+use tracing::warn;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RtAudioError {
@@ -126,7 +131,8 @@ pub(crate) fn check_for_error(raw: rtaudio_sys::rtaudio_t) -> Result<(), RtAudio
         let e = RtAudioError { type_, msg };
 
         if let RtAudioErrorType::Warning = e.type_ {
-            log::warn!("{}", e);
+            #[cfg(any(feature = "tracing", feature = "log"))]
+            warn!("{}", e);
 
             Ok(())
         } else {

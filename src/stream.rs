@@ -6,6 +6,11 @@ use std::sync::Mutex;
 use crate::error::{RtAudioError, RtAudioErrorType};
 use crate::{Buffers, DeviceParams, Host, SampleFormat, StreamFlags, StreamOptions, StreamStatus};
 
+#[cfg(all(feature = "log", not(feature = "tracing")))]
+use log::error;
+#[cfg(feature = "tracing")]
+use tracing::error;
+
 /// Information about a running RtAudio stream.
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -263,7 +268,8 @@ impl StreamHandle {
             // Safe because `self.raw` cannot be null.
             unsafe { rtaudio_sys::rtaudio_stop_stream(self.raw) };
             if let Err(e) = crate::check_for_error(self.raw) {
-                log::error!("Error while stopping RtAudio stream: {}", e);
+                #[cfg(any(feature = "tracing", feature = "log"))]
+                error!("Error while stopping RtAudio stream: {}", e);
             }
 
             // TODO: Make sure that the stream is always properly stopped
@@ -288,7 +294,8 @@ impl StreamHandle {
         // Safe because `self.raw` cannot be null.
         unsafe { rtaudio_sys::rtaudio_close_stream(self.raw) };
         if let Err(e) = crate::check_for_error(self.raw) {
-            log::error!("Error while closing RtAudio stream: {}", e);
+            #[cfg(any(feature = "tracing", feature = "log"))]
+            error!("Error while closing RtAudio stream: {}", e);
         }
 
         let host = Host { raw: self.raw };
@@ -315,7 +322,8 @@ impl Drop for StreamHandle {
         // Safe because we checked that `self.raw` is not null.
         unsafe { rtaudio_sys::rtaudio_close_stream(self.raw) };
         if let Err(e) = crate::check_for_error(self.raw) {
-            log::error!("Error while closing RtAudio stream: {}", e);
+            #[cfg(any(feature = "tracing", feature = "log"))]
+            error!("Error while closing RtAudio stream: {}", e);
         }
 
         // Safe because we checked that `self.raw` is not null, and

@@ -4,6 +4,13 @@ use rtaudio::{Api, Buffers, DeviceParams, SampleFormat, StreamInfo, StreamOption
 use std::time::{Duration, Instant};
 
 fn main() {
+    tracing::subscriber::set_global_default(
+        tracing_subscriber::FmtSubscriber::builder()
+            .with_max_level(tracing::Level::DEBUG)
+            .finish(),
+    )
+    .unwrap();
+
     let host = rtaudio::Host::new(Api::Unspecified).unwrap();
     let out_device = host.default_output_device().unwrap();
 

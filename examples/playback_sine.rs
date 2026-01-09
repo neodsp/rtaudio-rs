@@ -4,6 +4,13 @@ const AMPLITUDE: f32 = 0.5;
 const FREQ_HZ: f32 = 440.0;
 
 fn main() {
+    tracing::subscriber::set_global_default(
+        tracing_subscriber::FmtSubscriber::builder()
+            .with_max_level(tracing::Level::DEBUG)
+            .finish(),
+    )
+    .unwrap();
+
     let host = rtaudio::Host::new(Api::Unspecified).unwrap();
     dbg!(host.api());
 
