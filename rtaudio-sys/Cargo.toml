@@ -14,13 +14,21 @@ categories = ["multimedia::audio", "external-ffi-bindings"]
 
 [features]
 default = ["coreaudio", "alsa", "pulse", "oss", "wasapi", "ds"]
+# Enables the CoreAudio backend on MacOS
 coreaudio = []
+# Enables the ALSA backend on Linux
 alsa = []
+# Enables the Jack backend on Linux
 jack_linux = []
+# Enables the PulseAudio backend on Linux
 pulse = []
+# Enables the Open Sound System backend on Linux
 oss = []
+# Enables the ASIO backend on Windows
 asio = []
+# Enables the WASAPI backend on Windows
 wasapi = []
+# Enables the DirectSound backend on Windows
 ds = []
 
 [dependencies]

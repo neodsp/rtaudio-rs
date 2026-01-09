@@ -1,6 +1,6 @@
 [package]
 name = "rtaudio"
-version = "0.3.7"
+version = "0.4.0"
 edition = "2021"
 authors = ["Billy Messenger <billydm@noreply.codeberg.org>"]
 description = "Safe Rust wrapper and bindings for RtAudio"
@@ -15,18 +15,27 @@ categories = ["multimedia::audio", "api-bindings"]
 
 [features]
 default = ["coreaudio", "alsa", "pulse", "oss", "wasapi", "ds", "tracing"]
+# Enables the CoreAudio backend on MacOS
 coreaudio = ["rtaudio-sys/coreaudio"]
+# Enables the ALSA backend on Linux
 alsa = ["rtaudio-sys/alsa"]
+# Enables the Jack backend on Linux
 jack_linux = ["rtaudio-sys/jack_linux"]
+# Enables the PulseAudio backend on Linux
 pulse = ["rtaudio-sys/pulse"]
+# Enables the Open Sound System backend on Linux
 oss = ["rtaudio-sys/oss"]
+# Enables the ASIO backend on Windows
 asio = ["rtaudio-sys/asio"]
+# Enables the WASAPI backend on Windows
 wasapi = ["rtaudio-sys/wasapi"]
+# Enables the DirectSound backend on Windows
 ds = ["rtaudio-sys/ds"]
+# Enable serialization/deserialization of types
 serde = ["dep:serde", "bitflags/serde"]
-# Use the `tracing` crate for logging.
+# Use the `tracing` crate for logging
 tracing = ["dep:tracing"]
-# Use the `log` crate for logging.
+# Use the `log` crate for logging
 log = ["dep:log"]
 
 [workspace]
