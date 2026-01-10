@@ -1,15 +1,15 @@
-use std::ffi::CStr;
 use std::os::raw::{c_int, c_uint, c_void};
 use std::pin::Pin;
 use std::sync::Mutex;
 
 use crate::error::{RtAudioError, RtAudioErrorType};
+use crate::wrapper::nullable_c_str_to_string;
 use crate::{Buffers, DeviceParams, Host, SampleFormat, StreamFlags, StreamOptions, StreamStatus};
 
 #[cfg(all(feature = "log", not(feature = "tracing")))]
-use log::error;
+use log::warn;
 #[cfg(feature = "tracing")]
-use tracing::error;
+use tracing::warn;
 
 /// Information about a running RtAudio stream.
 #[derive(Debug, Clone, Default)]
@@ -50,7 +50,7 @@ pub struct StreamInfo {
 /// Only one stream can exist at a time.
 pub struct StreamHandle {
     info: StreamInfo,
-    raw: rtaudio_sys::rtaudio_t,
+    host: Option<Host>,
     started: bool,
 
     cb_context: Pin<Box<CallbackContext>>,
@@ -58,34 +58,37 @@ pub struct StreamHandle {
 
 impl StreamHandle {
     pub(crate) fn new<E>(
-        mut host: Host,
+        host: Host,
         output_device: Option<DeviceParams>,
         input_device: Option<DeviceParams>,
         sample_format: SampleFormat,
-        sample_rate: u32,
-        buffer_frames: u32,
+        sample_rate: Option<u32>,
+        buffer_frames: Option<u32>,
         options: StreamOptions,
         error_callback: E,
     ) -> Result<StreamHandle, (Host, RtAudioError)>
     where
         E: FnOnce(RtAudioError) + Send + 'static,
     {
-        assert!(!host.raw.is_null());
-        let raw = host.raw;
-
         let mut raw_options = match options.to_raw() {
             Ok(o) => o,
             Err(e) => return Err((host, e)),
         };
 
         let mut info = StreamInfo {
-            out_channels: output_device.map(|p| p.num_channels as usize).unwrap_or(0),
-            in_channels: input_device.map(|p| p.num_channels as usize).unwrap_or(0),
+            out_channels: output_device
+                .as_ref()
+                .map(|p| p.num_channels as usize)
+                .unwrap_or(0),
+            in_channels: input_device
+                .as_ref()
+                .map(|p| p.num_channels as usize)
+                .unwrap_or(0),
 
             sample_format,
-            sample_rate, // This will be overwritten later.
+            sample_rate: 0, // This will be overwritten later.
 
-            max_frames: buffer_frames as usize, // This will be overwritten later.
+            max_frames: 0, // This will be overwritten later.
 
             deinterleaved: options.flags.contains(StreamFlags::NONINTERLEAVED),
 
@@ -101,21 +104,108 @@ impl StreamHandle {
 
         let cb_context_ptr: *mut CallbackContext = &mut *cb_context;
 
-        let mut raw_output_device = output_device.map(|p| p.to_raw());
-        let mut raw_input_device = input_device.map(|p| p.to_raw());
+        let mut out_device_index = None;
+        let mut in_device_index = None;
 
-        let output_device_ptr: *mut rtaudio_sys::rtaudio_stream_parameters_t =
-            if let Some(raw_output_device) = &mut raw_output_device {
-                raw_output_device
-            } else {
-                std::ptr::null_mut()
-            };
-        let input_device_ptr: *mut rtaudio_sys::rtaudio_stream_parameters_t =
-            if let Some(raw_input_device) = &mut raw_input_device {
-                raw_input_device
-            } else {
-                std::ptr::null_mut()
-            };
+        let output_params = if let Some(d) = output_device {
+            let mut session_id = None;
+            if let Some(device_id) = &d.device_id {
+                if let Some(info) = host.find_device(device_id) {
+                    session_id = Some(info.session_id);
+                    out_device_index = Some(info.index);
+                } else if d.fallback {
+                    warn!("Output audio device with id {:?} was not found. Falling back to default device...", device_id);
+                } else {
+                    return Err((
+                        host,
+                        RtAudioError {
+                            type_: RtAudioErrorType::NoDevicesFound,
+                            msg: Some(format!(
+                                "Audio output device with id {:?} was not found",
+                                device_id
+                            )),
+                        },
+                    ));
+                }
+            }
+
+            if session_id.is_none() {
+                if let Some(i) = host.default_output_device_index() {
+                    session_id = Some(host.devices()[i].id.session_id);
+                    out_device_index = Some(i);
+                } else if d.dummy_fallback {
+                    warn!(
+                        "No default output audio device was found. Falling back to dummy device..."
+                    );
+                } else {
+                    return Err((
+                        host,
+                        RtAudioError {
+                            type_: RtAudioErrorType::NoDevicesFound,
+                            msg: Some(String::from("No default output audio device was found")),
+                        },
+                    ));
+                }
+            }
+
+            session_id.map(|session_id| rtaudio_sys::rtaudio_stream_parameters {
+                device_id: session_id.0 as c_uint,
+                num_channels: d.num_channels as c_uint,
+                first_channel: d.first_channel as c_uint,
+            })
+        } else {
+            None
+        };
+
+        let input_params = if let Some(d) = input_device {
+            let mut session_id = None;
+            if let Some(device_id) = &d.device_id {
+                if let Some(info) = host.find_device(device_id) {
+                    session_id = Some(info.session_id);
+                    in_device_index = Some(info.index);
+                } else if d.fallback {
+                    warn!("Input audio device with id {:?} was not found. Falling back to default device...", device_id);
+                } else {
+                    return Err((
+                        host,
+                        RtAudioError {
+                            type_: RtAudioErrorType::NoDevicesFound,
+                            msg: Some(format!(
+                                "Audio input device with id {:?} was not found",
+                                device_id
+                            )),
+                        },
+                    ));
+                }
+            }
+
+            if session_id.is_none() {
+                if let Some(i) = host.default_input_device_index() {
+                    session_id = Some(host.devices()[i].id.session_id);
+                    in_device_index = Some(i);
+                } else if d.dummy_fallback {
+                    warn!(
+                        "No default input audio device was found. Falling back to dummy device..."
+                    );
+                } else {
+                    return Err((
+                        host,
+                        RtAudioError {
+                            type_: RtAudioErrorType::NoDevicesFound,
+                            msg: Some(String::from("No default input audio device was found")),
+                        },
+                    ));
+                }
+            }
+
+            session_id.map(|session_id| rtaudio_sys::rtaudio_stream_parameters {
+                device_id: session_id.0 as c_uint,
+                num_channels: d.num_channels as c_uint,
+                first_channel: d.first_channel as c_uint,
+            })
+        } else {
+            None
+        };
 
         {
             let mut cb_singleton = ERROR_CB_SINGLETON.lock().unwrap();
@@ -133,70 +223,57 @@ impl StreamHandle {
             cb_singleton.cb = Some(Box::new(error_callback));
         }
 
-        let mut buffer_frames_res = buffer_frames as c_uint;
+        let use_sample_rate = if let Some(sr) = sample_rate {
+            sr
+        } else {
+            out_device_index
+                .map(|i| host.devices()[i].preferred_sample_rate)
+                .unwrap_or_else(|| {
+                    in_device_index
+                        .map(|i| host.devices[i].preferred_sample_rate)
+                        .unwrap_or(44100)
+                })
+        };
 
-        // Safe because we have checked that `raw` is not null, we have
-        // constructed the `output_params` and `input_params` pointers
-        // correctly, and we have pinned the `cb_context_ptr` pointer
-        // in place. Also `cb_context_ptr` will always stay valid for
-        // the lifetime the stream is open.
-        unsafe {
-            rtaudio_sys::rtaudio_open_stream(
-                raw,
-                output_device_ptr,
-                input_device_ptr,
-                sample_format.to_raw(),
-                sample_rate as c_uint,
-                &mut buffer_frames_res,
-                Some(crate::stream::raw_data_callback),
+        // Safe because we have pinned the `cb_context_ptr` pointer in place,
+        // `cb_context_ptr` is a member field of this struct, and the stream
+        // is automatically stopped when this struct is dropped, so
+        // `cb_context_ptr` will always stay valid for the lifetime the stream
+        // is open.
+        let max_frames = match unsafe {
+            host.wrapper.open_stream(
+                output_params,
+                input_params,
+                sample_format,
+                use_sample_rate,
+                buffer_frames,
                 cb_context_ptr as *mut c_void,
                 &mut raw_options,
                 Some(raw_error_callback),
             )
+        } {
+            Ok(max_frames) => max_frames,
+            Err(e) => {
+                return Err((host, e));
+            }
         };
-        if let Err(e) = crate::check_for_error(raw) {
-            // Safe because we have checked that `raw` is not null.
-            unsafe {
-                rtaudio_sys::rtaudio_close_stream(raw);
-            }
-            {
-                ERROR_CB_SINGLETON.lock().unwrap().cb = None;
-            }
-            return Err((host, e));
-        }
 
         // Get info about the stream.
-        info.max_frames = buffer_frames_res as usize;
-        // Safe because we have checked that `raw` is not null.
-        unsafe {
-            let latency = rtaudio_sys::rtaudio_get_stream_latency(raw);
-            if latency > 0 {
-                info.latency = Some(latency as usize);
-            }
-        }
-        if let Err(e) = crate::check_for_error(raw) {
-            // Safe because we have checked that `raw` is not null.
-            unsafe {
-                rtaudio_sys::rtaudio_close_stream(raw);
-            }
+        info.max_frames = max_frames as usize;
+        info.latency = host.wrapper.stream_latency();
+
+        if let Err(e) = host.wrapper.check_for_error() {
+            host.wrapper.close_stream();
             {
                 ERROR_CB_SINGLETON.lock().unwrap().cb = None;
             }
             return Err((host, e));
         }
 
-        // Safe because we have checked that `raw` is not null.
-        unsafe {
-            let sr = rtaudio_sys::rtaudio_get_stream_sample_rate(raw);
-            if sr > 0 {
-                info.sample_rate = sr as u32;
-            }
-        };
-        if let Err(e) = crate::check_for_error(raw) {
-            // Safe because we have checked that `raw` is not null.
-            unsafe {
-                rtaudio_sys::rtaudio_close_stream(raw);
-            }
+        info.sample_rate = host.wrapper.stream_sample_rate().unwrap_or(0);
+
+        if let Err(e) = host.wrapper.check_for_error() {
+            host.wrapper.close_stream();
             {
                 ERROR_CB_SINGLETON.lock().unwrap().cb = None;
             }
@@ -207,13 +284,10 @@ impl StreamHandle {
 
         let stream = Self {
             info,
-            raw,
+            host: Some(host),
             started: false,
             cb_context,
         };
-
-        // Make sure this isn't freed when `Host` is dropped.
-        host.raw = std::ptr::null_mut();
 
         Ok(stream)
     }
@@ -223,6 +297,11 @@ impl StreamHandle {
         &self.info
     }
 
+    /// Returns `true` if the stream has been started.
+    pub fn has_started(&self) -> bool {
+        self.started
+    }
+
     /// Start the stream.
     ///
     /// * `data_callback` - This gets called whenever there are new buffers
@@ -230,26 +309,18 @@ impl StreamHandle {
     ///
     /// If an error is returned, then it means that the stream failed to
     /// start.
+    ///
+    /// # Panics
+    /// Panics if the stream has already been started.
     pub fn start<F>(&mut self, data_callback: F) -> Result<(), RtAudioError>
     where
         F: FnMut(Buffers<'_>, &StreamInfo, StreamStatus) + Send + 'static,
     {
+        assert!(!self.started, "RtAudio stream has already been started");
+
         self.cb_context.cb = Box::new(data_callback);
 
-        // Safe because `self.raw` cannot be null. Also, the data pointed to
-        // the callback context is pinned in place, and it will always stay
-        // valid for the lifetime that the stream is open.
-        unsafe {
-            rtaudio_sys::rtaudio_start_stream(self.raw);
-        }
-        if let Err(e) = crate::check_for_error(self.raw) {
-            // Safe because `self.raw` cannot be null.
-            unsafe {
-                rtaudio_sys::rtaudio_stop_stream(self.raw);
-            }
-
-            return Err(e);
-        }
+        self.host.as_ref().unwrap().wrapper.start_stream()?;
 
         self.started = true;
 
@@ -265,15 +336,7 @@ impl StreamHandle {
     /// This does not close the stream.
     pub fn stop(&mut self) {
         if self.started {
-            // Safe because `self.raw` cannot be null.
-            unsafe { rtaudio_sys::rtaudio_stop_stream(self.raw) };
-            if let Err(e) = crate::check_for_error(self.raw) {
-                #[cfg(any(feature = "tracing", feature = "log"))]
-                error!("Error while stopping RtAudio stream: {}", e);
-            }
-
-            // TODO: Make sure that the stream is always properly stopped
-            // at this point.
+            self.host.as_ref().unwrap().wrapper.stop_stream();
 
             // Drop the user's callback.
             self.cb_context.cb = Box::new(|_, _, _| {});
@@ -291,17 +354,15 @@ impl StreamHandle {
     pub fn close(mut self) -> Host {
         self.stop();
 
-        // Safe because `self.raw` cannot be null.
-        unsafe { rtaudio_sys::rtaudio_close_stream(self.raw) };
-        if let Err(e) = crate::check_for_error(self.raw) {
-            #[cfg(any(feature = "tracing", feature = "log"))]
-            error!("Error while closing RtAudio stream: {}", e);
+        let host = self.host.take().unwrap();
+        host.wrapper.close_stream();
+
+        {
+            // Drop the user's error callback.
+            if let Ok(mut cb_lock) = ERROR_CB_SINGLETON.try_lock() {
+                cb_lock.cb = None;
+            }
         }
-
-        let host = Host { raw: self.raw };
-
-        // Make sure this isn't freed when `Stream` is dropped.
-        self.raw = std::ptr::null_mut();
 
         host
     }
@@ -309,26 +370,21 @@ impl StreamHandle {
 
 impl Drop for StreamHandle {
     fn drop(&mut self) {
-        {
-            ERROR_CB_SINGLETON.lock().unwrap().cb = None;
-        }
-
-        if self.raw.is_null() {
+        if self.host.is_none() {
             return;
         }
 
         self.stop();
 
-        // Safe because we checked that `self.raw` is not null.
-        unsafe { rtaudio_sys::rtaudio_close_stream(self.raw) };
-        if let Err(e) = crate::check_for_error(self.raw) {
-            #[cfg(any(feature = "tracing", feature = "log"))]
-            error!("Error while closing RtAudio stream: {}", e);
-        }
+        let host = self.host.take().unwrap();
+        host.wrapper.close_stream();
 
-        // Safe because we checked that `self.raw` is not null, and
-        // we are guaranteed to be the only owner of this pointer.
-        unsafe { rtaudio_sys::rtaudio_destroy(self.raw) };
+        {
+            // Drop the user's error callback.
+            if let Ok(mut cb_lock) = ERROR_CB_SINGLETON.try_lock() {
+                cb_lock.cb = None;
+            }
+        }
     }
 }
 
@@ -403,26 +459,16 @@ pub(crate) unsafe extern "C" fn raw_error_callback(
             return;
         }
 
-        // Safe because this C string will always be valid, we check
-        // for the null case, and we don't free the pointer.
-        let msg = unsafe {
-            if raw_msg.is_null() {
-                None
-            } else {
-                let msg = CStr::from_ptr(raw_msg).to_string_lossy().to_string();
+        if let Ok(mut cb_lock) = ERROR_CB_SINGLETON.try_lock() {
+            if let Some(cb) = { cb_lock.cb.take() } {
+                // Safety:
+                // * We assume that RtAudio always returns a valid C string.
+                let msg = unsafe { nullable_c_str_to_string(raw_msg) };
 
-                if msg.is_empty() {
-                    None
-                } else {
-                    Some(msg)
-                }
+                let e = RtAudioError { type_, msg };
+
+                (cb)(e);
             }
-        };
-
-        let e = RtAudioError { type_, msg };
-
-        if let Some(cb) = { ERROR_CB_SINGLETON.lock().unwrap().cb.take() } {
-            (cb)(e);
         }
     }
 }

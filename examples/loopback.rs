@@ -11,24 +11,19 @@ fn main() {
     let host = rtaudio::Host::new(Api::Unspecified).unwrap();
     dbg!(host.api());
 
-    let out_device = host.default_output_device().unwrap();
-    let in_device = host.default_input_device().unwrap();
-
     let mut stream_handle = host
         .open_stream(
             Some(DeviceParams {
-                device_id: out_device.id,
                 num_channels: 2,
-                first_channel: 0,
+                ..Default::default()
             }),
             Some(DeviceParams {
-                device_id: in_device.id,
                 num_channels: 2,
-                first_channel: 0,
+                ..Default::default()
             }),
             SampleFormat::Float32,
-            out_device.preferred_sample_rate,
-            256,
+            None,
+            None,
             StreamOptions::default(),
             |error| eprintln!("{}", error),
         )

@@ -12,21 +12,19 @@ fn main() {
     .unwrap();
 
     let host = rtaudio::Host::new(Api::Unspecified).unwrap();
-    let out_device = host.default_output_device().unwrap();
 
     let (error_tx, error_rx) = std::sync::mpsc::channel();
 
     let mut stream_handle = host
         .open_stream(
             Some(DeviceParams {
-                device_id: out_device.id,
                 num_channels: 2,
-                first_channel: 0,
+                ..Default::default()
             }),
             None,
             SampleFormat::Float32,
-            out_device.preferred_sample_rate,
-            256,
+            None,
+            None,
             StreamOptions::default(),
             move |error| error_tx.send(error).unwrap(),
         )

@@ -7,35 +7,58 @@ use crate::{DeviceID, StreamFlags};
 
 /// Used for specifying the parameters of a device when opening a
 /// stream.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DeviceParams {
     /// The ID (not index) of the device to use.
-    pub device_id: DeviceID,
-    /// The number of channels in the device to use.
+    ///
+    /// If this is `None`, then the default device will be used.
+    #[cfg_attr(feature = "serde", serde(default = "default_device_id"))]
+    pub device_id: Option<DeviceID>,
+    /// The number of channels in the device to use (default = 2).
+    #[cfg_attr(feature = "serde", serde(default = "default_num_channels"))]
     pub num_channels: u32,
-    /// The first channel index on the device (default = 0) to use.
+    /// The first channel index on the device to use (default = 0).
+    #[cfg_attr(feature = "serde", serde(default))]
     pub first_channel: u32,
+    /// If `true`, then fallback to the default device if the device
+    /// with the given ID is not found. Otherwise, don't start the stream
+    /// and return an error.
+    ///
+    /// By default this is set to `true`.
+    #[cfg_attr(feature = "serde", serde(default = "default_fallback"))]
+    pub fallback: bool,
+    /// If `true`, then fallback to a dummy output if the device if
+    /// a fallback device is not found. Otherwise, don't start the stream
+    /// and return an error.
+    ///
+    /// By default this is set to `true`.
+    #[cfg_attr(feature = "serde", serde(default = "default_fallback"))]
+    pub dummy_fallback: bool,
 }
 
 impl Default for DeviceParams {
     fn default() -> Self {
         Self {
-            device_id: DeviceID(0),
-            num_channels: 2,
+            device_id: default_device_id(),
+            num_channels: default_num_channels(),
             first_channel: 0,
+            fallback: default_fallback(),
+            dummy_fallback: default_fallback(),
         }
     }
 }
 
-impl DeviceParams {
-    pub fn to_raw(&self) -> rtaudio_sys::rtaudio_stream_parameters_t {
-        rtaudio_sys::rtaudio_stream_parameters_t {
-            device_id: self.device_id.0 as c_uint,
-            num_channels: self.num_channels as c_uint,
-            first_channel: self.first_channel as c_uint,
-        }
-    }
+const fn default_device_id() -> Option<DeviceID> {
+    None
+}
+
+const fn default_num_channels() -> u32 {
+    2
+}
+
+const fn default_fallback() -> bool {
+    true
 }
 
 /// Additional options for opening a stream.
@@ -45,6 +68,7 @@ pub struct StreamOptions {
     /// The bit flag parameters for this stream.
     ///
     /// By default, no flags are set.
+    #[cfg_attr(feature = "serde", serde(default))]
     pub flags: StreamFlags,
 
     /// Used to control stream latency in the Windows DirectSound, Linux OSS, and Linux Alsa APIs only.
@@ -54,6 +78,7 @@ pub struct StreamOptions {
     /// The actual value used when the stream is ran may be different.
     ///
     /// The default value is `4`.
+    #[cfg_attr(feature = "serde", serde(default = "default_num_buffers"))]
     pub num_buffers: u32,
 
     /// Scheduling priority of callback thread (only used with flag `StreamFlags::SCHEDULE_REALTIME`).
@@ -61,11 +86,13 @@ pub struct StreamOptions {
     /// Use a value of `-1` for the default priority.
     ///
     /// The default value is `-1`.
+    #[cfg_attr(feature = "serde", serde(default = "default_priority"))]
     pub priority: i32,
 
     /// The name of the stream (currently used only in Jack).
     ///
     /// The size of the name cannot exceed 511 bytes.
+    #[cfg_attr(feature = "serde", serde(default))]
     pub name: String,
 }
 
@@ -89,11 +116,19 @@ impl Default for StreamOptions {
     fn default() -> Self {
         Self {
             flags: StreamFlags::empty(),
-            num_buffers: 4,
-            priority: -1,
+            num_buffers: default_num_buffers(),
+            priority: default_priority(),
             name: String::from("RtAudio-rs Client"),
         }
     }
+}
+
+const fn default_num_buffers() -> u32 {
+    4
+}
+
+const fn default_priority() -> i32 {
+    -1
 }
 
 fn str_to_c_array<const MAX_LEN: usize>(s: &str) -> Result<[c_char; MAX_LEN], ()> {

@@ -8,6 +8,7 @@ mod error;
 mod host;
 mod options;
 mod stream;
+mod wrapper;
 
 pub use buffer::*;
 pub use device_info::*;

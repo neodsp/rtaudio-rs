@@ -7,10 +7,25 @@ use log::error;
 #[cfg(feature = "tracing")]
 use tracing::error;
 
-/// A unique identifier for a device.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// A unique identifier for a device for the current session.
+///
+/// Note, this is *NOT* gauranteed to persist across reboots.
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct DeviceID(pub u32);
+pub struct SessionID(pub u32);
+
+/// A unique identifier for an audio device. This ID persists across reboots.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct DeviceID {
+    /// The name of the device.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub name: String,
+    /// A unique identifier for the device in this current session.
+    /// (Note, this *NOT* gauranteed to persist across reboots.)
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub session_id: SessionID,
+}
 
 /// Queried information about a device.
 #[derive(Debug, Clone, PartialEq)]
@@ -40,12 +55,14 @@ pub struct DeviceInfo {
     pub preferred_sample_rate: u32,
     /// The available sample rates for this device.
     pub sample_rates: Vec<u32>,
-
-    /// The display name of the device.
-    pub name: String,
 }
 
 impl DeviceInfo {
+    /// The name of the device.
+    pub fn name(&self) -> &str {
+        &self.id.name
+    }
+
     pub fn from_raw(d: rtaudio_sys::rtaudio_device_info_t) -> Self {
         let mut sample_rates = Vec::new();
         for sr in d.sample_rates.iter() {
@@ -72,7 +89,10 @@ impl DeviceInfo {
         };
 
         Self {
-            id: DeviceID(d.id as u32),
+            id: DeviceID {
+                name,
+                session_id: SessionID(d.id as u32),
+            },
             output_channels: d.output_channels as u32,
             input_channels: d.input_channels as u32,
             duplex_channels: d.duplex_channels as u32,
@@ -81,7 +101,6 @@ impl DeviceInfo {
             native_formats: NativeFormats::from_bits_truncate(d.native_formats),
             preferred_sample_rate: d.preferred_sample_rate as u32,
             sample_rates,
-            name,
         }
     }
 }
