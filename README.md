@@ -5,10 +5,17 @@
 
 Safe Rust wrapper and bindings for [RtAudio](https://github.com/thestk/rtaudio) (version 6).
 
+Extra logic is also provided such as device IDs that persist across reboots and automatic fallback behavior.
+
+The main reason to use this over [`CPAL`](https://crates.io/crates/cpal) is if you need native duplex support for low latency synchronization between inputs and outputs.
+
 # Usage Example
 
 ```rust
-use rtaudio::{Api, Buffers, DeviceParams, SampleFormat, StreamInfo, StreamOptions, StreamStatus};
+use rtaudio::{
+    Api, Buffers, DeviceParams, SampleFormat, StreamInfo, StreamOptions, StreamStatus,
+    DEFAULT_BUFFER_FRAMES,
+};
 
 fn main() {
     let host = rtaudio::Host::new(Api::Unspecified).unwrap();
@@ -17,14 +24,13 @@ fn main() {
     let mut stream_handle = host
         .open_stream(
             Some(DeviceParams {
-                device_id: out_device.id,
                 num_channels: 2,
-                first_channel: 0,
+                ..Default::default()
             }),
             None,
             SampleFormat::Float32,
-            out_device.preferred_sample_rate,
-            256,
+            None,
+            DEFAULT_BUFFER_FRAMES,
             StreamOptions::default(),
             |error| eprintln!("{}", error),
         )

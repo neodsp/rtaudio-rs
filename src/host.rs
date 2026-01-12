@@ -1,17 +1,27 @@
 use crate::error::{RtAudioError, RtAudioErrorType};
-use crate::{Api, DeviceID, DeviceInfo, DeviceParams, SampleFormat, StreamHandle, StreamOptions};
-use std::os::raw::{c_int, c_uint};
+use crate::wrapper::RtAudioWrapper;
+use crate::{
+    Api, DeviceID, DeviceInfo, DeviceParams, SampleFormat, SessionID, StreamHandle, StreamOptions,
+};
 
 #[cfg(all(feature = "log", not(feature = "tracing")))]
 use log::warn;
 #[cfg(feature = "tracing")]
 use tracing::warn;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FindDeviceInfo {
+    /// The index this device appears in [`Host::devices()`].
+    pub index: usize,
+    /// The current session ID for this device (this may differ across reboots).
+    pub session_id: SessionID,
+}
+
 /// An RtAudio Host instance. This is used to enumerate audio devices before
 /// opening a stream.
-#[derive(Debug)]
 pub struct Host {
-    pub(crate) raw: rtaudio_sys::rtaudio_t,
+    pub(crate) wrapper: RtAudioWrapper,
+    pub(crate) devices: Vec<DeviceInfo>,
 }
 
 impl Host {
@@ -21,19 +31,12 @@ impl Host {
     /// If `Api::Unspecified` is used, then the best one for the system will
     /// automatically be chosen.
     pub fn new(api: Api) -> Result<Self, RtAudioError> {
-        // Safe because we check for the null case.
-        let raw = unsafe { rtaudio_sys::rtaudio_create(api.to_raw()) };
+        let mut new_self = Self {
+            wrapper: RtAudioWrapper::new(api)?,
+            devices: Vec::new(),
+        };
 
-        if raw.is_null() {
-            return Err(RtAudioError {
-                type_: RtAudioErrorType::Unkown,
-                msg: Some("failed to create RtAudio instance".into()),
-            });
-        }
-
-        let new_self = Self { raw };
-
-        crate::check_for_error(new_self.raw)?;
+        new_self.refresh_devices();
 
         Ok(new_self)
     }
@@ -41,218 +44,121 @@ impl Host {
     /// Whether or not to print extra warnings to the terminal output.
     ///
     /// By default this is set to `false`.
-    pub fn show_warnings(&self, show: bool) {
-        let show_int: c_int = if show { 1 } else { 0 };
-
-        unsafe {
-            rtaudio_sys::rtaudio_show_warnings(self.raw, show_int);
-        }
+    pub fn show_warnings(&mut self, show: bool) {
+        self.wrapper.show_warnings(show);
     }
 
     /// The API being used by this instance.
     pub fn api(&self) -> Api {
-        // Safe because `self.raw` is gauranteed to not be null.
-        let api_raw = unsafe { rtaudio_sys::rtaudio_current_api(self.raw) };
-        Api::from_raw(api_raw).unwrap_or(Api::Unspecified)
+        self.wrapper.api()
     }
 
-    /// Retrieve the number of available audio devices.
-    pub fn num_devices(&self) -> usize {
-        // Safe because `self.raw` is gauranteed to not be null.
-        let num_devices = unsafe { rtaudio_sys::rtaudio_device_count(self.raw) };
-
-        num_devices.max(0) as usize
-    }
-
-    /// Retrieve information about an audio device by its index.
-    pub fn get_device_info_by_index(&self, index: usize) -> Result<DeviceInfo, RtAudioError> {
-        // Safe because `self.raw` is gauranteed to not be null.
-        let id = unsafe { rtaudio_sys::rtaudio_get_device_id(self.raw, index as c_int) };
-
-        if id == 0 {
-            return Err(RtAudioError {
-                type_: RtAudioErrorType::InvalidParamter,
-                msg: Some(format!("Could not find device at index {}", index)),
-            });
-        }
-
-        crate::check_for_error(self.raw)?;
-
-        self.get_device_info_by_id(DeviceID(id as u32))
-    }
-
-    /// Retrieve info about an audio device by its ID.
-    pub fn get_device_info_by_id(&self, id: DeviceID) -> Result<DeviceInfo, RtAudioError> {
-        // Safe because `self.raw` is gauranteed to not be null.
-        let device_info_raw =
-            unsafe { rtaudio_sys::rtaudio_get_device_info(self.raw, id.0 as c_uint) };
-
-        crate::check_for_error(self.raw)?;
-
-        Ok(DeviceInfo::from_raw(device_info_raw))
-    }
-
-    /// Retrieve an iterator over all the available audio devices (including ones
-    /// that have failed to scan properly).
-    pub fn iter_devices_complete<'a>(&'a self) -> DeviceIter<'a> {
-        let num_devices = self.num_devices();
-        DeviceIter {
-            index: 0,
-            num_devices,
-            instance: self,
-        }
-    }
-
-    /// Retrieve an iterator over the available audio devices.
+    /// Refresh the list of audio devices.
     ///
-    /// If there was a problem scanning a device, a warning will be printed
-    /// to the log.
-    pub fn iter_devices<'a>(&'a self) -> impl Iterator<Item = DeviceInfo> + 'a {
-        self.iter_devices_complete().filter_map(|d| match d {
-            Ok(d) => Some(d),
-            Err(e) => {
-                #[cfg(any(feature = "tracing", feature = "log"))]
-                warn!("{}", e);
+    /// This will invalidate any device indexes.
+    pub fn refresh_devices(&mut self) {
+        let num_devices = self.wrapper.num_devices();
+        self.devices.clear();
 
-                None
+        for i in 0..num_devices {
+            // Safe because `self.raw` is gauranteed to not be null.
+            let session_id = self.wrapper.get_device_session_id_at_index(i);
+
+            let info = if session_id.is_none() {
+                Err(RtAudioError {
+                    type_: RtAudioErrorType::InvalidParamter,
+                    msg: Some(format!("Could not find device at index {}", i)),
+                })
+            } else if let Err(e) = self.wrapper.check_for_error() {
+                Err(e)
+            } else {
+                self.wrapper.get_device_info(session_id.unwrap())
+            };
+
+            match info {
+                Ok(info) => self.devices.push(info),
+                Err(e) => {
+                    #[cfg(not(any(feature = "tracing", feature = "log")))]
+                    let _ = e;
+
+                    #[cfg(any(feature = "tracing", feature = "log"))]
+                    warn!("Error while scanning audio device at index {}: {}", i, e);
+                }
             }
+        }
+    }
+
+    /// Find the index and session ID for the device with the given ID.
+    ///
+    /// Returns `None` if the device was not found.
+    pub fn find_device(&self, id: &DeviceID) -> Option<FindDeviceInfo> {
+        let mut first_matching_name_idx = None;
+        for (i, device_info) in self.devices.iter().enumerate() {
+            let name_matches = device_info.name() == &id.name;
+
+            if first_matching_name_idx.is_none() && name_matches {
+                first_matching_name_idx = Some(i);
+            }
+
+            if name_matches && device_info.id.session_id == id.session_id {
+                return Some(FindDeviceInfo {
+                    index: i,
+                    session_id: id.session_id,
+                });
+            }
+        }
+
+        first_matching_name_idx.map(|i| FindDeviceInfo {
+            index: i,
+            session_id: self.devices[i].id.session_id,
         })
+    }
+
+    /// Get the list of available audio devices.
+    pub fn devices(&self) -> &[DeviceInfo] {
+        &self.devices
     }
 
     /// Retrieve an iterator over the available output audio devices.
-    ///
-    /// If there was a problem scanning a device, a warning will be printed
-    /// to the log.
-    pub fn iter_output_devices<'a>(&'a self) -> impl Iterator<Item = DeviceInfo> + 'a {
-        self.iter_devices_complete().filter_map(|d| match d {
-            Ok(d) => {
-                if d.output_channels > 0 {
-                    Some(d)
-                } else {
-                    None
-                }
-            }
-            Err(e) => {
-                #[cfg(any(feature = "tracing", feature = "log"))]
-                warn!("{}", e);
-
-                None
-            }
-        })
+    pub fn iter_output_devices<'a>(&'a self) -> impl Iterator<Item = &'a DeviceInfo> {
+        self.devices.iter().filter(|d| d.output_channels > 0)
     }
 
     /// Retrieve an iterator over the available input audio devices.
-    ///
-    /// If there was a problem scanning a device, a warning will be printed
-    /// to the log.
-    pub fn iter_input_devices<'a>(&'a self) -> impl Iterator<Item = DeviceInfo> + 'a {
-        self.iter_devices_complete().filter_map(|d| match d {
-            Ok(d) => {
-                if d.input_channels > 0 {
-                    Some(d)
-                } else {
-                    None
-                }
-            }
-            Err(e) => {
-                #[cfg(any(feature = "tracing", feature = "log"))]
-                warn!("{}", e);
-
-                None
-            }
-        })
+    pub fn iter_input_devices<'a>(&'a self) -> impl Iterator<Item = &'a DeviceInfo> {
+        self.devices.iter().filter(|d| d.input_channels > 0)
     }
 
     /// Retrieve an iterator over the available duplex audio devices.
+    pub fn iter_duplex_devices<'a>(&'a self) -> impl Iterator<Item = &'a DeviceInfo> {
+        self.devices.iter().filter(|d| d.duplex_channels > 0)
+    }
+
+    /// Get the index of the default input device.
     ///
-    /// If there was a problem scanning a device, a warning will be printed
-    /// to the log.
-    pub fn iter_duplex_devices<'a>(&'a self) -> impl Iterator<Item = DeviceInfo> + 'a {
-        self.iter_devices_complete().filter_map(|d| match d {
-            Ok(d) => {
-                if d.duplex_channels > 0 {
-                    Some(d)
-                } else {
-                    None
-                }
-            }
-            Err(e) => {
-                #[cfg(any(feature = "tracing", feature = "log"))]
-                warn!("{}", e);
-
-                None
-            }
-        })
+    /// Return `None` if no default input device was found.
+    pub fn default_input_device_index(&self) -> Option<usize> {
+        self.devices
+            .iter()
+            .position(|d| d.is_default_input && d.input_channels > 0)
     }
 
-    /*
-    /// Retrieve a list of available audio devices.
-    pub fn devices(&self) -> Vec<DeviceInfo> {
-        self.iter_devices().collect()
+    /// Get the index of the default output device.
+    ///
+    /// Return `None` if no default output device was found.
+    pub fn default_output_device_index(&self) -> Option<usize> {
+        self.devices
+            .iter()
+            .position(|d| d.is_default_output && d.output_channels > 0)
     }
 
-    /// Retrieve a list of available output audio devices.
-    pub fn output_devices(&self) -> Vec<DeviceInfo> {
-        self.iter_output_devices().collect()
-    }
-
-    /// Retrieve a list of available input audio devices.
-    pub fn input_devices(&self) -> Vec<DeviceInfo> {
-        self.iter_input_devices().collect()
-    }
-
-    /// Retrieve a list of available duplex audio devices.
-    pub fn duplex_devices(&self) -> Vec<DeviceInfo> {
-        self.iter_duplex_devices().collect()
-    }
-    */
-
-    /// Returns the device ID (not index) of the default output device.
-    pub fn default_output_device_id(&self) -> Option<DeviceID> {
-        // Safe because `self.raw` is gauranteed to not be null.
-        let res = unsafe { rtaudio_sys::rtaudio_get_default_output_device(self.raw) };
-
-        if res == 0 {
-            None
-        } else {
-            Some(DeviceID(res as u32))
-        }
-    }
-
-    /// Returns the device ID (not index) of the default input device.
-    pub fn default_input_device_id(&self) -> Option<DeviceID> {
-        // Safe because `self.raw` is gauranteed to not be null.
-        let res = unsafe { rtaudio_sys::rtaudio_get_default_input_device(self.raw) };
-
-        if res == 0 {
-            None
-        } else {
-            Some(DeviceID(res as u32))
-        }
-    }
-
-    /// Returns information about the default output device.
-    pub fn default_output_device(&self) -> Result<DeviceInfo, RtAudioError> {
-        if let Some(id) = self.default_output_device_id() {
-            self.get_device_info_by_id(id)
-        } else {
-            Err(RtAudioError {
-                type_: RtAudioErrorType::NoDevicesFound,
-                msg: Some("No default output device found".into()),
-            })
-        }
-    }
-
-    /// Returns information about the default input device.
-    pub fn default_input_device(&self) -> Result<DeviceInfo, RtAudioError> {
-        if let Some(id) = self.default_input_device_id() {
-            self.get_device_info_by_id(id)
-        } else {
-            Err(RtAudioError {
-                type_: RtAudioErrorType::NoDevicesFound,
-                msg: Some("No default input device found".into()),
-            })
-        }
+    /// Get the index of the default duplex device.
+    ///
+    /// Return `None` if no default duplex device was found.
+    pub fn default_duplex_device_index(&self) -> Option<usize> {
+        self.devices
+            .iter()
+            .position(|d| (d.is_default_input || d.is_default_output) && d.duplex_channels > 0)
     }
 
     /// Open a new audio stream.
@@ -265,10 +171,14 @@ impl Host {
     /// support the given format, then it will automatically be converted to/from
     /// that format.
     /// * `sample_rate` - The sample rate to use. The stream may decide to use a
-    /// different sample rate if it's not supported.
+    /// different sample rate if it's not supported. Set to `None` to use the
+    /// output device's default sample rate.
     /// * `buffer_frames` - The desired maximum number of frames that can appear in a
     /// single process call. The stream may decide to use a different value if it's
-    /// not supported. The given value should be a power of 2.
+    /// not supported. A value of zero can be specified, in which case the lowest
+    /// allowable value is determined. The given value should be a power of 2. The
+    /// default value [`DEFAULT_BUFFER_FRAMES`](crate::DEFAULT_BUFFER_FRAMES) (1024)
+    /// can be used.
     /// * `options` - Additional options for the stream.
     /// * `error_callback` - This will be called if there was an error that caused the
     /// stream to close. If this happens, the returned `Stream` struct should be
@@ -280,7 +190,7 @@ impl Host {
         output_device: Option<DeviceParams>,
         input_device: Option<DeviceParams>,
         sample_format: SampleFormat,
-        sample_rate: u32,
+        sample_rate: Option<u32>,
         buffer_frames: u32,
         options: StreamOptions,
         error_callback: E,
@@ -301,34 +211,8 @@ impl Host {
     }
 }
 
-impl Drop for Host {
-    fn drop(&mut self) {
-        if !self.raw.is_null() {
-            // Safe because we checked that the pointer is not null, and we
-            // are guaranteed to be the only owner of this pointer.
-            unsafe {
-                rtaudio_sys::rtaudio_destroy(self.raw);
-            }
-        }
-    }
-}
-
-pub struct DeviceIter<'a> {
-    index: usize,
-    num_devices: usize,
-
-    instance: &'a Host,
-}
-
-impl<'a> Iterator for DeviceIter<'a> {
-    type Item = Result<DeviceInfo, RtAudioError>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.index += 1;
-        if self.index > self.num_devices {
-            None
-        } else {
-            Some(self.instance.get_device_info_by_index(self.index - 1))
-        }
+impl std::fmt::Debug for Host {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Host").finish()
     }
 }

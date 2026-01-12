@@ -1,13 +1,12 @@
-use std::ffi::CStr;
-use std::os::raw::c_char;
-
 mod buffer;
 mod device_info;
 mod enums;
 mod error;
+mod ffi_utils;
 mod host;
 mod options;
 mod stream;
+mod wrapper;
 
 pub use buffer::*;
 pub use device_info::*;
@@ -19,25 +18,17 @@ pub use stream::*;
 
 /// Get the current RtAudio version.
 pub fn version() -> String {
-    // Safe because this C string will always be valid, we check
-    // for the null case, and we don't free the pointer.
+    // Safety: We assume this c string pointer to always be valid.
     unsafe {
         let raw_s = rtaudio_sys::rtaudio_version();
-        if raw_s.is_null() {
-            // I don't expect this to ever happen.
-            return String::from("error");
-        }
-
-        CStr::from_ptr(raw_s as *mut c_char)
-            .to_string_lossy()
-            .to_string()
+        crate::ffi_utils::c_str_ptr_to_string_lossy(raw_s).unwrap_or_else(|| String::from("error"))
     }
 }
 
 /// Get the list of APIs compiled into this instance of RtAudio.
 pub fn compiled_apis() -> Vec<Api> {
-    // Safe because this list is gauranteed to be the reported length, we
-    // check for the null case, and we do not free the `raw_list` pointer.
+    // Safety: We assume RtAudio reports the correct length, we check
+    // for the null case, and we do not free the `raw_list` pointer.
     let raw_apis_slice: &[rtaudio_sys::rtaudio_api_t] = unsafe {
         let num_compiled_apis = rtaudio_sys::rtaudio_get_num_compiled_apis();
 

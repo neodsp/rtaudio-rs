@@ -13,7 +13,7 @@ fn main() {
 
         match rtaudio::Host::new(api) {
             Ok(rt) => {
-                for device_info in rt.iter_devices() {
+                for device_info in rt.devices() {
                     dbg!(device_info);
                 }
             }

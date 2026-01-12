@@ -1,12 +1,5 @@
 use std::error::Error;
-use std::ffi::CStr;
 use std::fmt;
-use std::os::raw::c_char;
-
-#[cfg(all(feature = "log", not(feature = "tracing")))]
-use log::warn;
-#[cfg(feature = "tracing")]
-use tracing::warn;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -98,47 +91,6 @@ impl fmt::Display for RtAudioError {
             write!(f, " | {}", msg)?;
         }
 
-        Ok(())
-    }
-}
-
-pub(crate) fn check_for_error(raw: rtaudio_sys::rtaudio_t) -> Result<(), RtAudioError> {
-    assert!(!raw.is_null());
-
-    // Safe because we checked that the pointer is not null.
-    let raw_type = unsafe { rtaudio_sys::rtaudio_error_type(raw) };
-
-    if let Some(type_) = RtAudioErrorType::from_raw(raw_type) {
-        // Safe because this C string will always be valid, we check
-        // for the null case, and we don't free the pointer.
-        let msg = unsafe {
-            let raw_s = rtaudio_sys::rtaudio_error(raw);
-            if raw_s.is_null() {
-                None
-            } else {
-                let msg = CStr::from_ptr(raw_s as *mut c_char)
-                    .to_string_lossy()
-                    .to_string();
-
-                if msg.is_empty() {
-                    None
-                } else {
-                    Some(msg)
-                }
-            }
-        };
-
-        let e = RtAudioError { type_, msg };
-
-        if let RtAudioErrorType::Warning = e.type_ {
-            #[cfg(any(feature = "tracing", feature = "log"))]
-            warn!("{}", e);
-
-            Ok(())
-        } else {
-            Err(e)
-        }
-    } else {
         Ok(())
     }
 }
