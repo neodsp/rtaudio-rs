@@ -1,6 +1,5 @@
 use bitflags::bitflags;
-use std::ffi::{CStr, CString};
-use std::os::raw::c_char;
+use std::ffi::CString;
 
 bitflags! {
     /// The native formats this device supports.
@@ -151,18 +150,12 @@ impl Api {
     pub fn get_name(&self) -> String {
         let index = self.to_raw();
 
-        // Safe because we assume that this function returns a valid C String,
-        // we check for the null case, and we don't free the pointer.
+        // Safety: We assume that this function returns a valid C String.
         let s = unsafe {
             // For some odd reason, this is off by one.
             let raw_s = rtaudio_sys::rtaudio_api_name(index);
-            if raw_s.is_null() {
-                return String::from("error");
-            }
-
-            CStr::from_ptr(raw_s as *mut c_char)
-                .to_string_lossy()
-                .to_string()
+            crate::ffi_utils::c_str_ptr_to_string_lossy(raw_s)
+                .unwrap_or_else(|| String::from("error"))
         };
 
         s
@@ -174,18 +167,12 @@ impl Api {
     pub fn get_display_name(&self) -> String {
         let index = self.to_raw();
 
-        // Safe because we assume that this function returns a valid C String,
-        // we check for the null case, and we don't free the pointer.
+        // Safety: We assume that this function returns a valid C String.
         let s = unsafe {
             // For some odd reason, this is off by one.
             let raw_s = rtaudio_sys::rtaudio_api_display_name(index);
-            if raw_s.is_null() {
-                return String::from("error");
-            }
-
-            CStr::from_ptr(raw_s as *mut c_char)
-                .to_string_lossy()
-                .to_string()
+            crate::ffi_utils::c_str_ptr_to_string_lossy(raw_s)
+                .unwrap_or_else(|| String::from("error"))
         };
 
         s

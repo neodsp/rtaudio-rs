@@ -78,6 +78,9 @@ impl Host {
             match info {
                 Ok(info) => self.devices.push(info),
                 Err(e) => {
+                    #[cfg(not(any(feature = "tracing", feature = "log")))]
+                    let _ = e;
+
                     #[cfg(any(feature = "tracing", feature = "log"))]
                     warn!("Error while scanning audio device at index {}: {}", i, e);
                 }
@@ -172,8 +175,10 @@ impl Host {
     /// output device's default sample rate.
     /// * `buffer_frames` - The desired maximum number of frames that can appear in a
     /// single process call. The stream may decide to use a different value if it's
-    /// not supported. The given value should be a power of 2. Set to `None` to use
-    /// the device's default value.
+    /// not supported. A value of zero can be specified, in which case the lowest
+    /// allowable value is determined. The given value should be a power of 2. The
+    /// default value [`DEFAULT_BUFFER_FRAMES`](crate::DEFAULT_BUFFER_FRAMES) (1024)
+    /// can be used.
     /// * `options` - Additional options for the stream.
     /// * `error_callback` - This will be called if there was an error that caused the
     /// stream to close. If this happens, the returned `Stream` struct should be
@@ -186,7 +191,7 @@ impl Host {
         input_device: Option<DeviceParams>,
         sample_format: SampleFormat,
         sample_rate: Option<u32>,
-        buffer_frames: Option<u32>,
+        buffer_frames: u32,
         options: StreamOptions,
         error_callback: E,
     ) -> Result<StreamHandle, (Self, RtAudioError)>

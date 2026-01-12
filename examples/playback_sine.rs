@@ -1,4 +1,7 @@
-use rtaudio::{Api, Buffers, DeviceParams, SampleFormat, StreamInfo, StreamOptions, StreamStatus};
+use rtaudio::{
+    Api, Buffers, DeviceParams, SampleFormat, StreamInfo, StreamOptions, StreamStatus,
+    DEFAULT_BUFFER_FRAMES,
+};
 
 const AMPLITUDE: f32 = 0.5;
 const FREQ_HZ: f32 = 440.0;
@@ -23,7 +26,7 @@ fn main() {
             None,
             SampleFormat::Float32,
             None,
-            None,
+            DEFAULT_BUFFER_FRAMES,
             StreamOptions::default(),
             |error| eprintln!("{}", error),
         )

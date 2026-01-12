@@ -1,16 +1,18 @@
 use rtaudio_sys::MAX_NAME_LENGTH;
-use std::ffi::CString;
-use std::os::raw::{c_char, c_int, c_uint};
+use std::os::raw::{c_int, c_uint};
 
 use crate::error::{RtAudioError, RtAudioErrorType};
 use crate::{DeviceID, StreamFlags};
+
+/// The default number of frames that can appear in a single process call.
+pub const DEFAULT_BUFFER_FRAMES: u32 = 1024;
 
 /// Used for specifying the parameters of a device when opening a
 /// stream.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DeviceParams {
-    /// The ID (not index) of the device to use.
+    /// The ID of the device to use.
     ///
     /// If this is `None`, then the default device will be used.
     #[cfg_attr(feature = "serde", serde(default = "default_device_id"))]
@@ -28,13 +30,13 @@ pub struct DeviceParams {
     /// By default this is set to `true`.
     #[cfg_attr(feature = "serde", serde(default = "default_fallback"))]
     pub fallback: bool,
-    /// If `true`, then fallback to a dummy output if the device if
-    /// a fallback device is not found. Otherwise, don't start the stream
-    /// and return an error.
+    /// If `true`, then fallback to no input/output if no default device
+    /// could be found. Otherwise, don't start the stream and return an
+    /// error.
     ///
     /// By default this is set to `true`.
     #[cfg_attr(feature = "serde", serde(default = "default_fallback"))]
-    pub dummy_fallback: bool,
+    pub no_device_fallback: bool,
 }
 
 impl Default for DeviceParams {
@@ -44,7 +46,7 @@ impl Default for DeviceParams {
             num_channels: default_num_channels(),
             first_channel: 0,
             fallback: default_fallback(),
-            dummy_fallback: default_fallback(),
+            no_device_fallback: default_fallback(),
         }
     }
 }
@@ -98,10 +100,11 @@ pub struct StreamOptions {
 
 impl StreamOptions {
     pub fn to_raw(&self) -> Result<rtaudio_sys::rtaudio_stream_options_t, RtAudioError> {
-        let name = str_to_c_array::<{ MAX_NAME_LENGTH }>(&self.name).map_err(|_| RtAudioError {
-            type_: RtAudioErrorType::InvalidParamter,
-            msg: Some("Stream name is invalid".into()),
-        })?;
+        let name = crate::ffi_utils::str_to_c_str_array::<{ MAX_NAME_LENGTH }>(&self.name)
+            .map_err(|e| RtAudioError {
+                type_: RtAudioErrorType::InvalidParamter,
+                msg: Some(format!("Stream name is invalid: {}", e)),
+            })?;
 
         Ok(rtaudio_sys::rtaudio_stream_options_t {
             flags: self.flags.bits(),
@@ -129,23 +132,4 @@ const fn default_num_buffers() -> u32 {
 
 const fn default_priority() -> i32 {
     -1
-}
-
-fn str_to_c_array<const MAX_LEN: usize>(s: &str) -> Result<[c_char; MAX_LEN], ()> {
-    let cs = CString::new(s).map_err(|_| ())?;
-    let cs_slice = cs.as_bytes_with_nul();
-
-    // Safe because i8 and u8 have the same size.
-    let cs_slice =
-        unsafe { std::slice::from_raw_parts(cs_slice.as_ptr() as *const c_char, cs_slice.len()) };
-
-    if cs_slice.len() > MAX_LEN as usize {
-        return Err(());
-    }
-
-    let mut c_array: [c_char; MAX_LEN] = [0; MAX_LEN];
-
-    c_array[0..cs_slice.len()].copy_from_slice(&cs_slice);
-
-    Ok(c_array)
 }

@@ -43,6 +43,10 @@ pub enum Buffers<'a> {
 }
 
 impl<'a> Buffers<'a> {
+    /// Safety:
+    /// `out` and `in` must either be null or point to a valid array of size
+    /// `frames * <size_of_sample_format>`, they must not overlap, and they
+    /// must be valid for the lifetime of this struct.
     pub(crate) unsafe fn from_raw(
         out: *mut c_void,
         in_: *mut c_void,

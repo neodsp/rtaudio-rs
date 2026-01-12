@@ -1,5 +1,5 @@
 use std::{
-    ffi::{c_char, c_int, c_uint, c_void, CStr},
+    ffi::{c_int, c_uint, c_void},
     ptr::NonNull,
 };
 
@@ -40,7 +40,7 @@ impl RtAudioWrapper {
             // * We assume that RtAudio always returns a valid C string.
             let msg = unsafe {
                 let raw_s = rtaudio_sys::rtaudio_error(self.0.as_ptr());
-                nullable_c_str_to_string(raw_s)
+                crate::ffi_utils::c_str_ptr_to_string_lossy(raw_s)
             };
 
             let e = RtAudioError { type_, msg };
@@ -81,15 +81,14 @@ impl RtAudioWrapper {
         if session_id <= 0 {
             None
         } else {
-            Some(SessionID(session_id as u32))
+            Some(session_id as u32)
         }
     }
 
     pub fn get_device_info(&self, session_id: SessionID) -> Result<DeviceInfo, RtAudioError> {
         // Safety: `self.0` cannot be null, and this struct is the only owner.
-        let device_info_raw = unsafe {
-            rtaudio_sys::rtaudio_get_device_info(self.0.as_ptr(), session_id.0 as c_uint)
-        };
+        let device_info_raw =
+            unsafe { rtaudio_sys::rtaudio_get_device_info(self.0.as_ptr(), session_id as c_uint) };
 
         self.check_for_error()?;
 
@@ -112,12 +111,12 @@ impl RtAudioWrapper {
         mut input_params: Option<rtaudio_sys::rtaudio_stream_parameters_t>,
         sample_format: SampleFormat,
         sample_rate: u32,
-        buffer_frames: Option<u32>,
+        buffer_frames: u32,
         userdata: *mut c_void,
         options: &mut rtaudio_sys::rtaudio_stream_options_t,
         errcb: rtaudio_sys::rtaudio_error_cb_t,
     ) -> Result<u32, RtAudioError> {
-        let mut max_frames: c_uint = buffer_frames.map(|f| f as c_uint).unwrap_or(0);
+        let mut max_frames: c_uint = buffer_frames as c_uint;
 
         let output_params_ptr: *mut rtaudio_sys::rtaudio_stream_parameters_t =
             if let Some(output_params) = &mut output_params {
@@ -215,26 +214,6 @@ impl Drop for RtAudioWrapper {
         // Safety: `self.0` cannot be null, and this struct is the only owner.
         unsafe {
             rtaudio_sys::rtaudio_destroy(self.0.as_ptr());
-        }
-    }
-}
-
-/// # Safety:
-/// `c_str_ptr` must either point to a valid c string or be null.
-pub(crate) unsafe fn nullable_c_str_to_string(c_str_ptr: *const i8) -> Option<String> {
-    unsafe {
-        if c_str_ptr.is_null() {
-            None
-        } else {
-            let s = CStr::from_ptr(c_str_ptr as *const c_char)
-                .to_string_lossy()
-                .to_string();
-
-            if s.is_empty() {
-                None
-            } else {
-                Some(s)
-            }
         }
     }
 }

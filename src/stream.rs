@@ -3,8 +3,9 @@ use std::pin::Pin;
 use std::sync::Mutex;
 
 use crate::error::{RtAudioError, RtAudioErrorType};
-use crate::wrapper::nullable_c_str_to_string;
-use crate::{Buffers, DeviceParams, Host, SampleFormat, StreamFlags, StreamOptions, StreamStatus};
+use crate::{
+    Buffers, DeviceID, DeviceParams, Host, SampleFormat, StreamFlags, StreamOptions, StreamStatus,
+};
 
 #[cfg(all(feature = "log", not(feature = "tracing")))]
 use log::warn;
@@ -15,6 +16,16 @@ use tracing::warn;
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct StreamInfo {
+    /// The ID/name of the output audio device being used.
+    ///
+    /// If no output is being used, then this will be `None`.
+    pub output_device: Option<DeviceID>,
+
+    /// The ID/name of the input audio device being used.
+    ///
+    /// If no input is being used, then this will be `None`.
+    pub input_device: Option<DeviceID>,
+
     /// The number of output audio channels.
     pub out_channels: usize,
     /// The number of input audio channels.
@@ -63,7 +74,7 @@ impl StreamHandle {
         input_device: Option<DeviceParams>,
         sample_format: SampleFormat,
         sample_rate: Option<u32>,
-        buffer_frames: Option<u32>,
+        buffer_frames: u32,
         options: StreamOptions,
         error_callback: E,
     ) -> Result<StreamHandle, (Host, RtAudioError)>
@@ -86,15 +97,15 @@ impl StreamHandle {
                 .unwrap_or(0),
 
             sample_format,
-            sample_rate: 0, // This will be overwritten later.
-
-            max_frames: 0, // This will be overwritten later.
-
             deinterleaved: options.flags.contains(StreamFlags::NONINTERLEAVED),
 
-            latency: None, // This will be overwritten later.
-
             stream_time: 0.0,
+
+            sample_rate: 0,      // This will be overwritten later.
+            max_frames: 0,       // This will be overwritten later.
+            latency: None,       // This will be overwritten later.
+            input_device: None,  // This will be overwritten later.
+            output_device: None, // This will be overwritten later.
         };
 
         let mut cb_context = Box::pin(CallbackContext {
@@ -110,10 +121,11 @@ impl StreamHandle {
         let output_params = if let Some(d) = output_device {
             let mut session_id = None;
             if let Some(device_id) = &d.device_id {
-                if let Some(info) = host.find_device(device_id) {
-                    session_id = Some(info.session_id);
-                    out_device_index = Some(info.index);
+                if let Some(device_info) = host.find_device(device_id) {
+                    session_id = Some(device_info.session_id);
+                    out_device_index = Some(device_info.index);
                 } else if d.fallback {
+                    #[cfg(any(feature = "tracing", feature = "log"))]
                     warn!("Output audio device with id {:?} was not found. Falling back to default device...", device_id);
                 } else {
                     return Err((
@@ -133,9 +145,10 @@ impl StreamHandle {
                 if let Some(i) = host.default_output_device_index() {
                     session_id = Some(host.devices()[i].id.session_id);
                     out_device_index = Some(i);
-                } else if d.dummy_fallback {
+                } else if d.no_device_fallback {
+                    #[cfg(any(feature = "tracing", feature = "log"))]
                     warn!(
-                        "No default output audio device was found. Falling back to dummy device..."
+                        "No default output audio device was found. No output stream will be started."
                     );
                 } else {
                     return Err((
@@ -149,7 +162,7 @@ impl StreamHandle {
             }
 
             session_id.map(|session_id| rtaudio_sys::rtaudio_stream_parameters {
-                device_id: session_id.0 as c_uint,
+                device_id: session_id as c_uint,
                 num_channels: d.num_channels as c_uint,
                 first_channel: d.first_channel as c_uint,
             })
@@ -160,10 +173,11 @@ impl StreamHandle {
         let input_params = if let Some(d) = input_device {
             let mut session_id = None;
             if let Some(device_id) = &d.device_id {
-                if let Some(info) = host.find_device(device_id) {
-                    session_id = Some(info.session_id);
-                    in_device_index = Some(info.index);
+                if let Some(device_info) = host.find_device(device_id) {
+                    session_id = Some(device_info.session_id);
+                    in_device_index = Some(device_info.index);
                 } else if d.fallback {
+                    #[cfg(any(feature = "tracing", feature = "log"))]
                     warn!("Input audio device with id {:?} was not found. Falling back to default device...", device_id);
                 } else {
                     return Err((
@@ -183,9 +197,10 @@ impl StreamHandle {
                 if let Some(i) = host.default_input_device_index() {
                     session_id = Some(host.devices()[i].id.session_id);
                     in_device_index = Some(i);
-                } else if d.dummy_fallback {
+                } else if d.no_device_fallback {
+                    #[cfg(any(feature = "tracing", feature = "log"))]
                     warn!(
-                        "No default input audio device was found. Falling back to dummy device..."
+                        "No default input audio device was found. No input stream will be started."
                     );
                 } else {
                     return Err((
@@ -199,13 +214,25 @@ impl StreamHandle {
             }
 
             session_id.map(|session_id| rtaudio_sys::rtaudio_stream_parameters {
-                device_id: session_id.0 as c_uint,
+                device_id: session_id as c_uint,
                 num_channels: d.num_channels as c_uint,
                 first_channel: d.first_channel as c_uint,
             })
         } else {
             None
         };
+
+        if out_device_index.is_none() && in_device_index.is_none() {
+            return Err((
+                host,
+                RtAudioError {
+                    type_: RtAudioErrorType::NoDevicesFound,
+                    msg: Some(String::from(
+                        "No default input or output audio device was found.",
+                    )),
+                },
+            ));
+        }
 
         {
             let mut cb_singleton = ERROR_CB_SINGLETON.lock().unwrap();
@@ -235,7 +262,7 @@ impl StreamHandle {
                 })
         };
 
-        // Safe because we have pinned the `cb_context_ptr` pointer in place,
+        // Safety: We have pinned the `cb_context_ptr` pointer in place,
         // `cb_context_ptr` is a member field of this struct, and the stream
         // is automatically stopped when this struct is dropped, so
         // `cb_context_ptr` will always stay valid for the lifetime the stream
@@ -280,6 +307,9 @@ impl StreamHandle {
             return Err((host, e));
         }
 
+        info.output_device = out_device_index.map(|i| host.devices()[i].id.clone());
+        info.input_device = in_device_index.map(|i| host.devices()[i].id.clone());
+
         cb_context.info = info.clone();
 
         let stream = Self {
@@ -311,7 +341,8 @@ impl StreamHandle {
     /// start.
     ///
     /// # Panics
-    /// Panics if the stream has already been started.
+    /// Panics if the stream has already been started. (Use
+    /// [`StreamHandle::has_started`] to check if it has been started already.)
     pub fn start<F>(&mut self, data_callback: F) -> Result<(), RtAudioError>
     where
         F: FnMut(Buffers<'_>, &StreamInfo, StreamStatus) + Send + 'static,
@@ -410,16 +441,17 @@ pub(crate) unsafe extern "C" fn raw_data_callback(
     }
 
     let cb_context_ptr = userdata as *mut CallbackContext;
-    // Safe because we checked that this is not null. We have also
+
+    // Safety: We checked that this is not null. We have also
     // pinned this context in place, and it will always be valid for
     // the lifetime that this stream is open.
     let cb_context = unsafe { &mut *cb_context_ptr };
 
     cb_context.info.stream_time = stream_time;
 
-    // This is safe because we assume that the correct amount
-    // of data pointed to by `out` and `in_` exists. Also this
-    // function checks if they are null.
+    // Safety: We assume that the correct amount of data pointed to by
+    // `out` and `in_` exist and that they do not overlap. Also this
+    // function correctly checks for the null case.
     let buffers = unsafe {
         Buffers::from_raw(
             out,
@@ -463,7 +495,7 @@ pub(crate) unsafe extern "C" fn raw_error_callback(
             if let Some(cb) = { cb_lock.cb.take() } {
                 // Safety:
                 // * We assume that RtAudio always returns a valid C string.
-                let msg = unsafe { nullable_c_str_to_string(raw_msg) };
+                let msg = unsafe { crate::ffi_utils::c_str_ptr_to_string_lossy(raw_msg) };
 
                 let e = RtAudioError { type_, msg };
 

@@ -1,4 +1,7 @@
-use rtaudio::{Api, Buffers, DeviceParams, SampleFormat, StreamInfo, StreamOptions, StreamStatus};
+use rtaudio::{
+    Api, Buffers, DeviceParams, SampleFormat, StreamInfo, StreamOptions, StreamStatus,
+    DEFAULT_BUFFER_FRAMES,
+};
 
 fn main() {
     tracing::subscriber::set_global_default(
@@ -23,7 +26,7 @@ fn main() {
             }),
             SampleFormat::Float32,
             None,
-            None,
+            DEFAULT_BUFFER_FRAMES,
             StreamOptions::default(),
             |error| eprintln!("{}", error),
         )
