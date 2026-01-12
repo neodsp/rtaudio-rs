@@ -1,6 +1,6 @@
 use std::os::raw::{c_int, c_uint, c_void};
 use std::pin::Pin;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 
 use crate::error::{RtAudioError, RtAudioErrorType};
 use crate::{
@@ -437,17 +437,21 @@ pub(crate) unsafe extern "C" fn raw_data_callback(
 /// Note, RtAudio provides no way to tell which host/stream the error originates
 /// from. So prefer to stop all existing streams when an error is received.
 pub fn set_error_callback<F: FnMut(RtAudioError) + Send + 'static>(callback: F) {
-    let mut cb_lock = ERROR_CB_SINGLETON.lock().unwrap();
+    let error_cb = ERROR_CB_SINGLETON.get_or_init(|| Mutex::new(ErrorCallbackSingleton::new()));
+    let mut cb_lock = error_cb.lock().unwrap();
     cb_lock.cb = Some(Box::new(callback));
 }
 
-lazy_static::lazy_static! {
-    static ref ERROR_CB_SINGLETON: Mutex<ErrorCallbackSingleton> =
-        Mutex::new(ErrorCallbackSingleton { cb: None });
-}
+static ERROR_CB_SINGLETON: OnceLock<Mutex<ErrorCallbackSingleton>> = OnceLock::new();
 
 pub(crate) struct ErrorCallbackSingleton {
     cb: Option<Box<dyn FnMut(RtAudioError) + Send + 'static>>,
+}
+
+impl ErrorCallbackSingleton {
+    fn new() -> Self {
+        Self { cb: None }
+    }
 }
 
 #[no_mangle]
@@ -462,7 +466,9 @@ pub(crate) unsafe extern "C" fn raw_error_callback(
             return;
         }
 
-        if let Ok(mut cb_lock) = ERROR_CB_SINGLETON.lock() {
+        let error_cb = ERROR_CB_SINGLETON.get_or_init(|| Mutex::new(ErrorCallbackSingleton::new()));
+
+        if let Ok(mut cb_lock) = error_cb.lock() {
             if let Some(cb) = &mut cb_lock.cb {
                 // Safety:
                 // * We assume that RtAudio always returns a valid C string.
