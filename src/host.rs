@@ -180,12 +180,9 @@ impl Host {
     /// default value [`DEFAULT_BUFFER_FRAMES`](crate::DEFAULT_BUFFER_FRAMES) (1024)
     /// can be used.
     /// * `options` - Additional options for the stream.
-    /// * `error_callback` - This will be called if there was an error that caused the
-    /// stream to close. If this happens, the returned `Stream` struct should be
-    /// manually closed or dropped.
     ///
-    /// Only one stream can be opened at a time (this is a limitation with RtAudio).
-    pub fn open_stream<E>(
+    /// Multiple streams can be opened at the same time using multiple [`Host`]s.
+    pub fn open_stream(
         self,
         output_device: Option<DeviceParams>,
         input_device: Option<DeviceParams>,
@@ -193,11 +190,7 @@ impl Host {
         sample_rate: Option<u32>,
         buffer_frames: u32,
         options: StreamOptions,
-        error_callback: E,
-    ) -> Result<StreamHandle, (Self, RtAudioError)>
-    where
-        E: FnOnce(RtAudioError) + Send + 'static,
-    {
+    ) -> Result<StreamHandle, (Self, RtAudioError)> {
         StreamHandle::new(
             self,
             output_device,
@@ -206,7 +199,6 @@ impl Host {
             sample_rate,
             buffer_frames,
             options,
-            error_callback,
         )
     }
 }

@@ -32,7 +32,6 @@ fn main() {
             None,
             DEFAULT_BUFFER_FRAMES,
             StreamOptions::default(),
-            |error| eprintln!("{}", error),
         )
         .unwrap();
 

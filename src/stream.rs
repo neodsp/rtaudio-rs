@@ -68,7 +68,7 @@ pub struct StreamHandle {
 }
 
 impl StreamHandle {
-    pub(crate) fn new<E>(
+    pub(crate) fn new(
         host: Host,
         output_device: Option<DeviceParams>,
         input_device: Option<DeviceParams>,
@@ -76,11 +76,7 @@ impl StreamHandle {
         sample_rate: Option<u32>,
         buffer_frames: u32,
         options: StreamOptions,
-        error_callback: E,
-    ) -> Result<StreamHandle, (Host, RtAudioError)>
-    where
-        E: FnOnce(RtAudioError) + Send + 'static,
-    {
+    ) -> Result<StreamHandle, (Host, RtAudioError)> {
         let mut raw_options = match options.to_raw() {
             Ok(o) => o,
             Err(e) => return Err((host, e)),
@@ -234,22 +230,6 @@ impl StreamHandle {
             ));
         }
 
-        {
-            let mut cb_singleton = ERROR_CB_SINGLETON.lock().unwrap();
-
-            if cb_singleton.cb.is_some() {
-                return Err((
-                    host,
-                    RtAudioError {
-                        type_: RtAudioErrorType::InvalidUse,
-                        msg: Some("Only one RtAudio stream can exist at a time".into()),
-                    },
-                ));
-            }
-
-            cb_singleton.cb = Some(Box::new(error_callback));
-        }
-
         let use_sample_rate = if let Some(sr) = sample_rate {
             sr
         } else {
@@ -291,9 +271,6 @@ impl StreamHandle {
 
         if let Err(e) = host.wrapper.check_for_error() {
             host.wrapper.close_stream();
-            {
-                ERROR_CB_SINGLETON.lock().unwrap().cb = None;
-            }
             return Err((host, e));
         }
 
@@ -301,9 +278,6 @@ impl StreamHandle {
 
         if let Err(e) = host.wrapper.check_for_error() {
             host.wrapper.close_stream();
-            {
-                ERROR_CB_SINGLETON.lock().unwrap().cb = None;
-            }
             return Err((host, e));
         }
 
@@ -388,13 +362,6 @@ impl StreamHandle {
         let host = self.host.take().unwrap();
         host.wrapper.close_stream();
 
-        {
-            // Drop the user's error callback.
-            if let Ok(mut cb_lock) = ERROR_CB_SINGLETON.try_lock() {
-                cb_lock.cb = None;
-            }
-        }
-
         host
     }
 }
@@ -409,13 +376,6 @@ impl Drop for StreamHandle {
 
         let host = self.host.take().unwrap();
         host.wrapper.close_stream();
-
-        {
-            // Drop the user's error callback.
-            if let Ok(mut cb_lock) = ERROR_CB_SINGLETON.try_lock() {
-                cb_lock.cb = None;
-            }
-        }
     }
 }
 
@@ -470,13 +430,24 @@ pub(crate) unsafe extern "C" fn raw_data_callback(
     0
 }
 
+/// Set the global error handling callback that will be called whenever there is
+/// an error that causes an audio stream to close. When an error is received, all
+/// streams from all hosts should be manually closed or dropped.
+///
+/// Note, RtAudio provides no way to tell which host/stream the error originates
+/// from. So prefer to stop all existing streams when an error is received.
+pub fn set_error_callback<F: FnMut(RtAudioError) + Send + 'static>(callback: F) {
+    let mut cb_lock = ERROR_CB_SINGLETON.lock().unwrap();
+    cb_lock.cb = Some(Box::new(callback));
+}
+
 lazy_static::lazy_static! {
     static ref ERROR_CB_SINGLETON: Mutex<ErrorCallbackSingleton> =
         Mutex::new(ErrorCallbackSingleton { cb: None });
 }
 
 pub(crate) struct ErrorCallbackSingleton {
-    cb: Option<Box<dyn FnOnce(RtAudioError) + Send + 'static>>,
+    cb: Option<Box<dyn FnMut(RtAudioError) + Send + 'static>>,
 }
 
 #[no_mangle]
@@ -491,15 +462,15 @@ pub(crate) unsafe extern "C" fn raw_error_callback(
             return;
         }
 
-        if let Ok(mut cb_lock) = ERROR_CB_SINGLETON.try_lock() {
-            if let Some(cb) = { cb_lock.cb.take() } {
+        if let Ok(mut cb_lock) = ERROR_CB_SINGLETON.lock() {
+            if let Some(cb) = &mut cb_lock.cb {
                 // Safety:
                 // * We assume that RtAudio always returns a valid C string.
                 let msg = unsafe { crate::ffi_utils::c_str_ptr_to_string_lossy(raw_msg) };
 
                 let e = RtAudioError { type_, msg };
 
-                (cb)(e);
+                cb(e);
             }
         }
     }

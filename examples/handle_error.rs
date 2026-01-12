@@ -14,9 +14,18 @@ fn main() {
     )
     .unwrap();
 
-    let host = rtaudio::Host::new(Api::Unspecified).unwrap();
-
+    // Set the global error handling callback that will be called whenever
+    // there is an error that causes an audio stream to close. When an
+    // error is received, all streams from all hosts should be manually
+    // closed or dropped.
+    //
+    // Note, RtAudio provides no way to tell which host/stream the error
+    // originates from. So prefer to stop all existing streams when an
+    // error is received.
     let (error_tx, error_rx) = std::sync::mpsc::channel();
+    rtaudio::set_error_callback(move |error| error_tx.send(error).unwrap());
+
+    let host = rtaudio::Host::new(Api::Unspecified).unwrap();
 
     let mut stream_handle = host
         .open_stream(
@@ -29,7 +38,6 @@ fn main() {
             None,
             DEFAULT_BUFFER_FRAMES,
             StreamOptions::default(),
-            move |error| error_tx.send(error).unwrap(),
         )
         .unwrap();
 
