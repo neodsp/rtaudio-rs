@@ -1,6 +1,6 @@
 [package]
 name = "rtaudio"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2021"
 authors = ["Billy Messenger <billydm@noreply.codeberg.org>"]
 description = "Safe Rust wrapper and bindings for RtAudio"
@@ -14,7 +14,7 @@ categories = ["multimedia::audio", "api-bindings"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["coreaudio", "alsa", "pulse", "oss", "wasapi", "ds", "tracing"]
+default = ["coreaudio", "alsa", "pulse", "wasapi", "ds", "tracing"]
 # Enables the CoreAudio backend on MacOS
 coreaudio = ["rtaudio-sys/coreaudio"]
 # Enables the ALSA backend on Linux

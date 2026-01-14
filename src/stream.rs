@@ -3,9 +3,7 @@ use std::pin::Pin;
 use std::sync::{Mutex, OnceLock};
 
 use crate::error::{RtAudioError, RtAudioErrorType};
-use crate::{
-    Buffers, DeviceID, DeviceParams, Host, SampleFormat, StreamFlags, StreamOptions, StreamStatus,
-};
+use crate::{Buffers, DeviceID, Host, SampleFormat, StreamConfig, StreamFlags, StreamStatus};
 
 #[cfg(all(feature = "log", not(feature = "tracing")))]
 use log::warn;
@@ -70,30 +68,27 @@ pub struct StreamHandle {
 impl StreamHandle {
     pub(crate) fn new(
         host: Host,
-        output_device: Option<DeviceParams>,
-        input_device: Option<DeviceParams>,
-        sample_format: SampleFormat,
-        sample_rate: Option<u32>,
-        buffer_frames: u32,
-        options: StreamOptions,
+        config: &StreamConfig,
     ) -> Result<StreamHandle, (Host, RtAudioError)> {
-        let mut raw_options = match options.to_raw() {
+        let mut raw_options = match config.raw_stream_options() {
             Ok(o) => o,
             Err(e) => return Err((host, e)),
         };
 
         let mut info = StreamInfo {
-            out_channels: output_device
+            out_channels: config
+                .output_device
                 .as_ref()
                 .map(|p| p.num_channels as usize)
                 .unwrap_or(0),
-            in_channels: input_device
+            in_channels: config
+                .input_device
                 .as_ref()
                 .map(|p| p.num_channels as usize)
                 .unwrap_or(0),
 
-            sample_format,
-            deinterleaved: options.flags.contains(StreamFlags::NONINTERLEAVED),
+            sample_format: config.sample_format,
+            deinterleaved: config.flags.contains(StreamFlags::NONINTERLEAVED),
 
             stream_time: 0.0,
 
@@ -114,7 +109,7 @@ impl StreamHandle {
         let mut out_device_index = None;
         let mut in_device_index = None;
 
-        let output_params = if let Some(d) = output_device {
+        let output_params = if let Some(d) = &config.output_device {
             let mut session_id = None;
             if let Some(device_id) = &d.device_id {
                 if let Some(device_info) = host.find_device(device_id) {
@@ -166,7 +161,7 @@ impl StreamHandle {
             None
         };
 
-        let input_params = if let Some(d) = input_device {
+        let input_params = if let Some(d) = &config.input_device {
             let mut session_id = None;
             if let Some(device_id) = &d.device_id {
                 if let Some(device_info) = host.find_device(device_id) {
@@ -230,7 +225,7 @@ impl StreamHandle {
             ));
         }
 
-        let use_sample_rate = if let Some(sr) = sample_rate {
+        let use_sample_rate = if let Some(sr) = config.sample_rate {
             sr
         } else {
             out_device_index
@@ -251,9 +246,9 @@ impl StreamHandle {
             host.wrapper.open_stream(
                 output_params,
                 input_params,
-                sample_format,
+                config.sample_format,
                 use_sample_rate,
-                buffer_frames,
+                config.buffer_frames,
                 cb_context_ptr as *mut c_void,
                 &mut raw_options,
                 Some(raw_error_callback),

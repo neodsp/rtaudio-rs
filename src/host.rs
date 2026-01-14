@@ -1,8 +1,6 @@
 use crate::error::{RtAudioError, RtAudioErrorType};
 use crate::wrapper::RtAudioWrapper;
-use crate::{
-    Api, DeviceID, DeviceInfo, DeviceParams, SampleFormat, SessionID, StreamHandle, StreamOptions,
-};
+use crate::{Api, DeviceID, DeviceInfo, SessionID, StreamConfig, StreamHandle};
 
 #[cfg(all(feature = "log", not(feature = "tracing")))]
 use log::warn;
@@ -163,43 +161,15 @@ impl Host {
 
     /// Open a new audio stream.
     ///
-    /// * `output_device` - The parameters for the output device to use. If you do
-    /// not wish to use an output device, set this to `None`.
-    /// * `input_device` - The parameters for the input device to use. If you do not
-    /// wish to use an input device, set this to `None`.
-    /// * `sample_format` - The sample format to use. If the device doesn't natively
-    /// support the given format, then it will automatically be converted to/from
-    /// that format.
-    /// * `sample_rate` - The sample rate to use. The stream may decide to use a
-    /// different sample rate if it's not supported. Set to `None` to use the
-    /// output device's default sample rate.
-    /// * `buffer_frames` - The desired maximum number of frames that can appear in a
-    /// single process call. The stream may decide to use a different value if it's
-    /// not supported. A value of zero can be specified, in which case the lowest
-    /// allowable value is determined. The given value should be a power of 2. The
-    /// default value [`DEFAULT_BUFFER_FRAMES`](crate::DEFAULT_BUFFER_FRAMES) (1024)
-    /// can be used.
-    /// * `options` - Additional options for the stream.
-    ///
     /// Multiple streams can be opened at the same time using multiple [`Host`]s.
-    pub fn open_stream(
-        self,
-        output_device: Option<DeviceParams>,
-        input_device: Option<DeviceParams>,
-        sample_format: SampleFormat,
-        sample_rate: Option<u32>,
-        buffer_frames: u32,
-        options: StreamOptions,
-    ) -> Result<StreamHandle, (Self, RtAudioError)> {
-        StreamHandle::new(
-            self,
-            output_device,
-            input_device,
-            sample_format,
-            sample_rate,
-            buffer_frames,
-            options,
-        )
+    pub fn open_stream(self, config: &StreamConfig) -> Result<StreamHandle, (Self, RtAudioError)> {
+        StreamHandle::new(self, config)
+    }
+}
+
+impl Default for Host {
+    fn default() -> Self {
+        Self::new(Api::Unspecified).unwrap()
     }
 }
 

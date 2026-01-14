@@ -7,33 +7,18 @@ Safe Rust wrapper and bindings for [RtAudio](https://github.com/thestk/rtaudio) 
 
 Extra logic is also provided such as device IDs that persist across reboots and automatic fallback behavior.
 
-The main reason to use this over [`CPAL`](https://crates.io/crates/cpal) is if you need native duplex support for low latency synchronization between inputs and outputs.
+The main reason to use this over [CPAL](https://crates.io/crates/cpal) is if you need native duplex support for low latency synchronization between inputs and outputs.
 
 # Usage Example
 
 ```rust
-use rtaudio::{
-    Api, Buffers, DeviceParams, SampleFormat, StreamInfo, StreamOptions, StreamStatus,
-    DEFAULT_BUFFER_FRAMES,
-};
+use rtaudio::{Api, Buffers, StreamConfig, StreamInfo, StreamStatus};
 
 fn main() {
-    let host = rtaudio::Host::new(Api::Unspecified).unwrap();
+    let host = rtaudio::Host::default();
     let out_device = host.default_output_device().unwrap();
 
-    let mut stream_handle = host
-        .open_stream(
-            Some(DeviceParams {
-                num_channels: 2,
-                ..Default::default()
-            }),
-            None,
-            SampleFormat::Float32,
-            None,
-            DEFAULT_BUFFER_FRAMES,
-            StreamOptions::default(),
-        )
-        .unwrap();
+    let mut stream_handle = host.open_stream(&StreamConfig::default()).unwrap();
 
     let mut phasor = 0.0;
     let phasor_inc = 440.0 / stream_handle.info().sample_rate as f32;
@@ -101,7 +86,7 @@ Download at https://cmake.org/.
 By default, Jack on Linux and ASIO on Windows is disabled. You can enable them with the `jack_linux` and `asio` features.
 
 ```
-rtaudio = { version = "0.3.2", features = ["jack_linux", "asio"] }
+rtaudio = { version = "0.7.0", features = ["jack_linux", "asio"] }
 ```
 
 # Notes

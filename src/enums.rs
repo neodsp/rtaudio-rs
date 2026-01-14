@@ -102,6 +102,12 @@ bitflags! {
     }
 }
 
+impl Default for StreamFlags {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
 bitflags! {
     /// Stream status (over- or underflow) flags.
     #[repr(C)]

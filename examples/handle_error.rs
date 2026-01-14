@@ -1,9 +1,6 @@
 //! Demonstrates how to handle stream errors.
 
-use rtaudio::{
-    Api, Buffers, DeviceParams, SampleFormat, StreamInfo, StreamOptions, StreamStatus,
-    DEFAULT_BUFFER_FRAMES,
-};
+use rtaudio::{Buffers, StreamConfig, StreamInfo, StreamStatus};
 use std::time::{Duration, Instant};
 
 fn main() {
@@ -25,21 +22,9 @@ fn main() {
     let (error_tx, error_rx) = std::sync::mpsc::channel();
     rtaudio::set_error_callback(move |error| error_tx.send(error).unwrap());
 
-    let host = rtaudio::Host::new(Api::Unspecified).unwrap();
+    let host = rtaudio::Host::default();
 
-    let mut stream_handle = host
-        .open_stream(
-            Some(DeviceParams {
-                num_channels: 2,
-                ..Default::default()
-            }),
-            None,
-            SampleFormat::Float32,
-            None,
-            DEFAULT_BUFFER_FRAMES,
-            StreamOptions::default(),
-        )
-        .unwrap();
+    let mut stream_handle = host.open_stream(&StreamConfig::default()).unwrap();
 
     stream_handle
         .start(

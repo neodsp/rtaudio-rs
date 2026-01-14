@@ -1,7 +1,4 @@
-use rtaudio::{
-    Api, Buffers, DeviceParams, SampleFormat, StreamInfo, StreamOptions, StreamStatus,
-    DEFAULT_BUFFER_FRAMES,
-};
+use rtaudio::{Buffers, StreamConfig, StreamInfo, StreamStatus};
 
 const AMPLITUDE: f32 = 0.5;
 const FREQ_HZ: f32 = 440.0;
@@ -14,22 +11,10 @@ fn main() {
     )
     .unwrap();
 
-    let host = rtaudio::Host::new(Api::Unspecified).unwrap();
+    let host = rtaudio::Host::default();
     dbg!(host.api());
 
-    let mut stream_handle = host
-        .open_stream(
-            Some(DeviceParams {
-                num_channels: 2,
-                ..Default::default()
-            }),
-            None,
-            SampleFormat::Float32,
-            None,
-            DEFAULT_BUFFER_FRAMES,
-            StreamOptions::default(),
-        )
-        .unwrap();
+    let mut stream_handle = host.open_stream(&StreamConfig::default()).unwrap();
     dbg!(stream_handle.info());
 
     let mut phasor = 0.0;

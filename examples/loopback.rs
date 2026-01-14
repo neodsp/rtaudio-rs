@@ -1,7 +1,4 @@
-use rtaudio::{
-    Api, Buffers, DeviceParams, SampleFormat, StreamInfo, StreamOptions, StreamStatus,
-    DEFAULT_BUFFER_FRAMES,
-};
+use rtaudio::{Buffers, DeviceParams, StreamConfig, StreamInfo, StreamStatus};
 
 fn main() {
     tracing::subscriber::set_global_default(
@@ -11,24 +8,15 @@ fn main() {
     )
     .unwrap();
 
-    let host = rtaudio::Host::new(Api::Unspecified).unwrap();
+    let host = rtaudio::Host::default();
     dbg!(host.api());
 
     let mut stream_handle = host
-        .open_stream(
-            Some(DeviceParams {
-                num_channels: 2,
-                ..Default::default()
-            }),
-            Some(DeviceParams {
-                num_channels: 2,
-                ..Default::default()
-            }),
-            SampleFormat::Float32,
-            None,
-            DEFAULT_BUFFER_FRAMES,
-            StreamOptions::default(),
-        )
+        .open_stream(&StreamConfig {
+            output_device: Some(DeviceParams::default()),
+            input_device: Some(DeviceParams::default()),
+            ..Default::default()
+        })
         .unwrap();
     dbg!(stream_handle.info());
 
