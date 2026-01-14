@@ -13,7 +13,7 @@ bitflags! {
     /// Note you can still start a stream with any format. RtAudio will just
     /// automatically convert to/from the best native format.
     #[repr(C)]
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
     #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct NativeFormats: rtaudio_sys::rtaudio_format_t {
         /// 8-bit signed integer.
@@ -39,7 +39,7 @@ bitflags! {
 /// and the soundcard. Thus, endian-ness is not a concern in the following format
 /// definitions.
 #[repr(usize)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SampleFormat {
     /// 8-bit signed integer.
@@ -53,6 +53,7 @@ pub enum SampleFormat {
     /// 32-bit signed integer.
     SInt32 = rtaudio_sys::RTAUDIO_FORMAT_SINT32 as usize,
     /// 32-bit floating point number, normalized between plus/minus 1.0.
+    #[default]
     Float32 = rtaudio_sys::RTAUDIO_FORMAT_FLOAT32 as usize,
     /// 64-bit floating point number, normalized between plus/minus 1.0.
     Float64 = rtaudio_sys::RTAUDIO_FORMAT_FLOAT64 as usize,
@@ -68,12 +69,6 @@ impl SampleFormat {
             SampleFormat::Float32 => rtaudio_sys::RTAUDIO_FORMAT_FLOAT32,
             SampleFormat::Float64 => rtaudio_sys::RTAUDIO_FORMAT_FLOAT64,
         }
-    }
-}
-
-impl Default for SampleFormat {
-    fn default() -> Self {
-        SampleFormat::Float32
     }
 }
 
@@ -122,10 +117,11 @@ bitflags! {
 }
 
 #[repr(i32)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Api {
     /// Search for a default working compiled API.
+    #[default]
     Unspecified = rtaudio_sys::RTAUDIO_API_UNSPECIFIED as i32,
     /// Macintosh OS-X Core Audio API.
     MacOSXCore = rtaudio_sys::RTAUDIO_API_MACOSX_CORE as i32,

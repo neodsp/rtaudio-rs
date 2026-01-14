@@ -86,7 +86,7 @@ Download at https://cmake.org/.
 By default, Jack on Linux and ASIO on Windows is disabled. You can enable them with the `jack_linux` and `asio` features.
 
 ```
-rtaudio = { version = "0.7.0", features = ["jack_linux", "asio"] }
+rtaudio = { version = "0.7.1", features = ["jack_linux", "asio"] }
 ```
 
 # Notes
