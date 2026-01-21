@@ -93,7 +93,7 @@ rtaudio = { version = "0.7.1", features = ["jack_linux", "asio"] }
 
 Bindings were made from the official [C header](https://github.com/thestk/rtaudio/blob/master/rtaudio_c.h). No bindings to the C++ interface are provided.
 
-This will build RtAudio from source. Don't forget to initialize git submodules (git submodule update --init) or clone with --recursive.
+This will build RtAudio from source. Don't forget to initialize git submodules (`git submodule update --init`) or clone with `--recursive`.
 
 This currently builds a static library from source on all platforms. Once RtAudio version 6 is commonly available in Linux package managers I might change it to link to the dynamic library on Linux.
 

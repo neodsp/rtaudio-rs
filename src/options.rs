@@ -18,9 +18,11 @@ pub struct DeviceParams {
     pub device_id: Option<DeviceID>,
     /// The number of channels in the device to use.
     ///
-    /// The default value is `2`.
+    /// Set to `None` to use the default number of channels for the device.
+    ///
+    /// The default value is `None`.
     #[cfg_attr(feature = "serde", serde(default = "default_num_channels"))]
-    pub num_channels: u32,
+    pub num_channels: Option<u32>,
     /// The first channel index on the device to use.
     ///
     /// The default value is `0`.
@@ -58,8 +60,8 @@ const fn default_device_id() -> Option<DeviceID> {
     None
 }
 
-const fn default_num_channels() -> u32 {
-    2
+const fn default_num_channels() -> Option<u32> {
+    None
 }
 
 const fn default_fallback() -> bool {

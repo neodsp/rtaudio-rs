@@ -76,27 +76,19 @@ impl StreamHandle {
         };
 
         let mut info = StreamInfo {
-            out_channels: config
-                .output_device
-                .as_ref()
-                .map(|p| p.num_channels as usize)
-                .unwrap_or(0),
-            in_channels: config
-                .input_device
-                .as_ref()
-                .map(|p| p.num_channels as usize)
-                .unwrap_or(0),
-
             sample_format: config.sample_format,
             deinterleaved: config.flags.contains(StreamFlags::NONINTERLEAVED),
 
             stream_time: 0.0,
 
-            sample_rate: 0,      // This will be overwritten later.
-            max_frames: 0,       // This will be overwritten later.
-            latency: None,       // This will be overwritten later.
-            input_device: None,  // This will be overwritten later.
-            output_device: None, // This will be overwritten later.
+            // These values will be overwritten later.
+            out_channels: 0,
+            in_channels: 0,
+            sample_rate: 0,
+            max_frames: 0,
+            latency: None,
+            input_device: None,
+            output_device: None,
         };
 
         let mut cb_context = Box::pin(CallbackContext {
@@ -152,10 +144,27 @@ impl StreamHandle {
                 }
             }
 
-            session_id.map(|session_id| rtaudio_sys::rtaudio_stream_parameters {
-                device_id: session_id as c_uint,
-                num_channels: d.num_channels as c_uint,
-                first_channel: d.first_channel as c_uint,
+            session_id.map(|session_id| {
+                info.out_channels = d.num_channels.map(|c| c as usize).unwrap_or_else(|| {
+                    out_device_index
+                    .map(|i| {
+                        let num_channels = host.devices()[i].output_channels as usize;
+
+                        // On some platforms like ALSA, some devices are incorrectly reported
+                        // to have 64 channels. Assume these are stereo devices.
+                        if num_channels >= 32 {
+                            warn!("Output device is reported to have a large number of channels: {}. Assuming the device is stereo...", num_channels);
+                            2
+                        } else { num_channels }
+                    })
+                    .unwrap_or(2)
+                });
+
+                rtaudio_sys::rtaudio_stream_parameters {
+                    device_id: session_id as c_uint,
+                    num_channels: info.out_channels as c_uint,
+                    first_channel: d.first_channel as c_uint,
+                }
             })
         } else {
             None
@@ -204,10 +213,27 @@ impl StreamHandle {
                 }
             }
 
-            session_id.map(|session_id| rtaudio_sys::rtaudio_stream_parameters {
-                device_id: session_id as c_uint,
-                num_channels: d.num_channels as c_uint,
-                first_channel: d.first_channel as c_uint,
+            session_id.map(|session_id| {
+                info.in_channels = d.num_channels.map(|c| c as usize).unwrap_or_else(|| {
+                    in_device_index
+                    .map(|i| {
+                        let num_channels = host.devices()[i].input_channels as usize;
+
+                        // On some platforms like ALSA, some devices are incorrectly reported
+                        // to have 64 channels. Assume these are stereo devices.
+                        if num_channels >= 32 {
+                            warn!("Input device is reported to have a large number of channels: {}. Assuming the device is stereo...", num_channels);
+                            2
+                        } else { num_channels }
+                    })
+                    .unwrap_or(2)
+                });
+
+                rtaudio_sys::rtaudio_stream_parameters {
+                    device_id: session_id as c_uint,
+                    num_channels: info.in_channels as c_uint,
+                    first_channel: d.first_channel as c_uint,
+                }
             })
         } else {
             None
@@ -236,6 +262,9 @@ impl StreamHandle {
                         .unwrap_or(44100)
                 })
         };
+
+        dbg!(&output_params);
+        dbg!(&input_params);
 
         // Safety: We have pinned the `cb_context_ptr` pointer in place,
         // `cb_context_ptr` is a member field of this struct, and the stream
