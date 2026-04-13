@@ -7,9 +7,7 @@ pub unsafe fn c_str_ptr_to_string_lossy(c_str_ptr: *const c_char) -> Option<Stri
         if c_str_ptr.is_null() {
             None
         } else {
-            let s = CStr::from_ptr(c_str_ptr)
-                .to_string_lossy()
-                .to_string();
+            let s = CStr::from_ptr(c_str_ptr).to_string_lossy().to_string();
 
             if s.is_empty() {
                 None
