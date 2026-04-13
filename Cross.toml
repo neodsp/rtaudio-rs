@@ -1,0 +1,16 @@
+[target.aarch64-unknown-linux-gnu]
+pre-build = [
+    # 1. Add the target architecture to Debian's package manager
+    "dpkg --add-architecture $CROSS_DEB_ARCH",
+    "apt-get update",
+
+    # 2. Install host build tools (no architecture suffix needed)
+    "apt-get --assume-yes install pkg-config clang",
+
+    # 3. Install target dependencies with the $CROSS_DEB_ARCH suffix
+    "apt-get --assume-yes install libxcb-shape0-dev:$CROSS_DEB_ARCH libxcb-xfixes0-dev:$CROSS_DEB_ARCH",
+    "apt-get --assume-yes install libxkbcommon-dev:$CROSS_DEB_ARCH libfontconfig-dev:$CROSS_DEB_ARCH",
+    "apt-get --assume-yes install libavcodec-dev:$CROSS_DEB_ARCH libavformat-dev:$CROSS_DEB_ARCH libavutil-dev:$CROSS_DEB_ARCH libavfilter-dev:$CROSS_DEB_ARCH libavdevice-dev:$CROSS_DEB_ARCH",
+    "apt-get --assume-yes install libasound2-dev:$CROSS_DEB_ARCH libpulse-dev:$CROSS_DEB_ARCH",
+    "apt-get --assume-yes install libssl-dev:$CROSS_DEB_ARCH"
+]

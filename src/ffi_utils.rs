@@ -2,12 +2,12 @@ use std::ffi::{c_char, CStr, CString, NulError};
 
 /// # Safety:
 /// `c_str_ptr` must either point to a valid c string or be null.
-pub unsafe fn c_str_ptr_to_string_lossy(c_str_ptr: *const i8) -> Option<String> {
+pub unsafe fn c_str_ptr_to_string_lossy(c_str_ptr: *const c_char) -> Option<String> {
     unsafe {
         if c_str_ptr.is_null() {
             None
         } else {
-            let s = CStr::from_ptr(c_str_ptr as *const c_char)
+            let s = CStr::from_ptr(c_str_ptr)
                 .to_string_lossy()
                 .to_string();
 

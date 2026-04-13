@@ -33,6 +33,13 @@ fn main() {
                     for lib in alsa_library.libs {
                         println!("cargo:rustc-link-lib={}", lib);
                     }
+                    // Help CMake's FindALSA locate headers/libs during cross-compilation
+                    if let Some(dir) = alsa_library.include_paths.first() {
+                        config.define("ALSA_INCLUDE_DIR", dir.to_str().unwrap());
+                    }
+                    if let Some(dir) = alsa_library.link_paths.first() {
+                        config.define("ALSA_LIBRARY", format!("{}/libasound.so", dir.display()));
+                    }
                 }
             };
         }
@@ -52,6 +59,11 @@ fn main() {
                 Ok(pulse_library) => {
                     for lib in pulse_library.libs {
                         println!("cargo:rustc-link-lib={}", lib);
+                    }
+                    // Help CMake's find_library locate libs during cross-compilation
+                    if let Some(dir) = pulse_library.link_paths.first() {
+                        config.define("PULSE_LIB", format!("{}/libpulse.so", dir.display()));
+                        config.define("PULSESIMPLE_LIB", format!("{}/libpulse-simple.so", dir.display()));
                     }
                 }
             };
