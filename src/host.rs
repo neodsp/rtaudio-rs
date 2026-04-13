@@ -92,7 +92,7 @@ impl Host {
     pub fn find_device(&self, id: &DeviceID) -> Option<FindDeviceInfo> {
         let mut first_matching_name_idx = None;
         for (i, device_info) in self.devices.iter().enumerate() {
-            let name_matches = device_info.name() == &id.name;
+            let name_matches = device_info.name() == id.name;
 
             if first_matching_name_idx.is_none() && name_matches {
                 first_matching_name_idx = Some(i);
@@ -118,17 +118,17 @@ impl Host {
     }
 
     /// Retrieve an iterator over the available output audio devices.
-    pub fn iter_output_devices<'a>(&'a self) -> impl Iterator<Item = &'a DeviceInfo> {
+    pub fn iter_output_devices(&self) -> impl Iterator<Item = &DeviceInfo> {
         self.devices.iter().filter(|d| d.output_channels > 0)
     }
 
     /// Retrieve an iterator over the available input audio devices.
-    pub fn iter_input_devices<'a>(&'a self) -> impl Iterator<Item = &'a DeviceInfo> {
+    pub fn iter_input_devices(&self) -> impl Iterator<Item = &DeviceInfo> {
         self.devices.iter().filter(|d| d.input_channels > 0)
     }
 
     /// Retrieve an iterator over the available duplex audio devices.
-    pub fn iter_duplex_devices<'a>(&'a self) -> impl Iterator<Item = &'a DeviceInfo> {
+    pub fn iter_duplex_devices(&self) -> impl Iterator<Item = &DeviceInfo> {
         self.devices.iter().filter(|d| d.duplex_channels > 0)
     }
 

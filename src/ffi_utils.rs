@@ -28,15 +28,15 @@ pub fn str_to_c_str_array<const MAX_LEN: usize>(
     let cs_slice =
         unsafe { std::slice::from_raw_parts(cs_slice.as_ptr() as *const c_char, cs_slice.len()) };
 
-    if cs_slice.len() > MAX_LEN as usize {
+    if cs_slice.len() > MAX_LEN {
         return Err(StrToCStrArrayError::TooLarge {
             len: cs_slice.len(),
-            max_len: MAX_LEN as usize,
+            max_len: MAX_LEN,
         });
     }
 
     let mut c_array: [c_char; MAX_LEN] = [0; MAX_LEN];
-    c_array[0..cs_slice.len()].copy_from_slice(&cs_slice);
+    c_array[0..cs_slice.len()].copy_from_slice(cs_slice);
 
     Ok(c_array)
 }

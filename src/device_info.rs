@@ -119,7 +119,7 @@ impl DeviceInfo {
                 break;
             }
 
-            sample_rates.push(*sr as u32);
+            sample_rates.push((*sr));
         }
 
         // Safety: i8 and u8 have the same size, and we are correctly
@@ -127,7 +127,7 @@ impl DeviceInfo {
         let name_slice: &[u8] =
             unsafe { std::slice::from_raw_parts(d.name.as_ptr() as *const u8, d.name.len()) };
 
-        let name = match CStr::from_bytes_until_nul(&name_slice) {
+        let name = match CStr::from_bytes_until_nul(name_slice) {
             Ok(n) => n.to_string_lossy().to_string(),
             Err(e) => {
                 #[cfg(not(any(feature = "tracing", feature = "log")))]
@@ -143,15 +143,15 @@ impl DeviceInfo {
         Self {
             id: DeviceID {
                 name,
-                session_id: d.id as u32,
+                session_id: d.id,
             },
-            output_channels: d.output_channels as u32,
-            input_channels: d.input_channels as u32,
-            duplex_channels: d.duplex_channels as u32,
+            output_channels: d.output_channels,
+            input_channels: d.input_channels,
+            duplex_channels: d.duplex_channels,
             is_default_output: d.is_default_output != 0,
             is_default_input: d.is_default_input != 0,
             native_formats: NativeFormats::from_bits_truncate(d.native_formats),
-            preferred_sample_rate: d.preferred_sample_rate as u32,
+            preferred_sample_rate: d.preferred_sample_rate,
             sample_rates,
         }
     }

@@ -122,25 +122,25 @@ bitflags! {
 pub enum Api {
     /// Search for a default working compiled API.
     #[default]
-    Unspecified = rtaudio_sys::RTAUDIO_API_UNSPECIFIED as i32,
+    Unspecified = rtaudio_sys::RTAUDIO_API_UNSPECIFIED,
     /// Macintosh OS-X Core Audio API.
-    MacOSXCore = rtaudio_sys::RTAUDIO_API_MACOSX_CORE as i32,
+    MacOSXCore = rtaudio_sys::RTAUDIO_API_MACOSX_CORE,
     /// The Advanced Linux Sound Architecture API.
-    LinuxALSA = rtaudio_sys::RTAUDIO_API_LINUX_ALSA as i32,
+    LinuxALSA = rtaudio_sys::RTAUDIO_API_LINUX_ALSA,
     /// The Jack Low-Latency Audio Server API.
-    UnixJack = rtaudio_sys::RTAUDIO_API_UNIX_JACK as i32,
+    UnixJack = rtaudio_sys::RTAUDIO_API_UNIX_JACK,
     /// The Linux PulseAudio API.
-    LinuxPulse = rtaudio_sys::RTAUDIO_API_LINUX_PULSE as i32,
+    LinuxPulse = rtaudio_sys::RTAUDIO_API_LINUX_PULSE,
     /// The Linux Open Sound System API.
-    LinuxOSS = rtaudio_sys::RTAUDIO_API_LINUX_OSS as i32,
+    LinuxOSS = rtaudio_sys::RTAUDIO_API_LINUX_OSS,
     /// The Steinberg Audio Stream I/O API.
-    WindowsASIO = rtaudio_sys::RTAUDIO_API_WINDOWS_ASIO as i32,
+    WindowsASIO = rtaudio_sys::RTAUDIO_API_WINDOWS_ASIO,
     /// The Microsoft WASAPI API.
-    WindowsWASAPI = rtaudio_sys::RTAUDIO_API_WINDOWS_WASAPI as i32,
+    WindowsWASAPI = rtaudio_sys::RTAUDIO_API_WINDOWS_WASAPI,
     /// The Microsoft DirectSound API.
-    WindowsDS = rtaudio_sys::RTAUDIO_API_WINDOWS_DS as i32,
+    WindowsDS = rtaudio_sys::RTAUDIO_API_WINDOWS_DS,
     /// A compilable but non-functional API.
-    Dummy = rtaudio_sys::RTAUDIO_API_DUMMY as i32,
+    Dummy = rtaudio_sys::RTAUDIO_API_DUMMY,
 }
 
 impl Api {
@@ -153,14 +153,14 @@ impl Api {
         let index = self.to_raw();
 
         // Safety: We assume that this function returns a valid C String.
-        let s = unsafe {
+        
+
+        unsafe {
             // For some odd reason, this is off by one.
             let raw_s = rtaudio_sys::rtaudio_api_name(index);
             crate::ffi_utils::c_str_ptr_to_string_lossy(raw_s)
                 .unwrap_or_else(|| String::from("error"))
-        };
-
-        s
+        }
     }
 
     /// Get the display name for the given API.
@@ -170,14 +170,14 @@ impl Api {
         let index = self.to_raw();
 
         // Safety: We assume that this function returns a valid C String.
-        let s = unsafe {
+        
+
+        unsafe {
             // For some odd reason, this is off by one.
             let raw_s = rtaudio_sys::rtaudio_api_display_name(index);
             crate::ffi_utils::c_str_ptr_to_string_lossy(raw_s)
                 .unwrap_or_else(|| String::from("error"))
-        };
-
-        s
+        }
     }
 
     /// Retrieve the API by its name (as given in Api::get_name()).
@@ -191,15 +191,7 @@ impl Api {
         // Safe because we have constructed a valid C String.
         let index = unsafe { rtaudio_sys::rtaudio_compiled_api_by_name(c_name.as_ptr()) };
 
-        if let Some(a) = Self::from_raw(index) {
-            if a == Api::Unspecified {
-                None
-            } else {
-                Some(a)
-            }
-        } else {
-            None
-        }
+        Self::from_raw(index).filter(|&a| a != Api::Unspecified)
     }
 
     pub fn from_raw(a: rtaudio_sys::rtaudio_api_t) -> Option<Api> {

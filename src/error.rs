@@ -13,27 +13,27 @@ pub struct RtAudioError {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RtAudioErrorType {
     /// A non-critical error.
-    Warning = rtaudio_sys::RTAUDIO_ERROR_WARNING as i32,
+    Warning = rtaudio_sys::RTAUDIO_ERROR_WARNING,
     /// An unspecified error type.
-    Unkown = rtaudio_sys::RTAUDIO_ERROR_UNKNOWN as i32,
+    Unkown = rtaudio_sys::RTAUDIO_ERROR_UNKNOWN,
     /// No devices found on system.
-    NoDevicesFound = rtaudio_sys::RTAUDIO_ERROR_NO_DEVICES_FOUND as i32,
+    NoDevicesFound = rtaudio_sys::RTAUDIO_ERROR_NO_DEVICES_FOUND,
     /// An invalid device ID was specified.
-    InvalidDevice = rtaudio_sys::RTAUDIO_ERROR_INVALID_DEVICE as i32,
+    InvalidDevice = rtaudio_sys::RTAUDIO_ERROR_INVALID_DEVICE,
     /// A device in use was disconnected.
-    DeviceDisconnect = rtaudio_sys::RTAUDIO_ERROR_DEVICE_DISCONNECT as i32,
+    DeviceDisconnect = rtaudio_sys::RTAUDIO_ERROR_DEVICE_DISCONNECT,
     /// An error occurred during memory allocation.
-    MemoryError = rtaudio_sys::RTAUDIO_ERROR_MEMORY_ERROR as i32,
+    MemoryError = rtaudio_sys::RTAUDIO_ERROR_MEMORY_ERROR,
     /// An invalid parameter was specified to a function.
-    InvalidParamter = rtaudio_sys::RTAUDIO_ERROR_INVALID_PARAMETER as i32,
+    InvalidParamter = rtaudio_sys::RTAUDIO_ERROR_INVALID_PARAMETER,
     /// The function was called incorrectly.
-    InvalidUse = rtaudio_sys::RTAUDIO_ERROR_INVALID_USE as i32,
+    InvalidUse = rtaudio_sys::RTAUDIO_ERROR_INVALID_USE,
     /// A system driver error occurred.
-    DriverError = rtaudio_sys::RTAUDIO_ERROR_DRIVER_ERROR as i32,
+    DriverError = rtaudio_sys::RTAUDIO_ERROR_DRIVER_ERROR,
     /// A system error occurred.
-    SystemError = rtaudio_sys::RTAUDIO_ERROR_SYSTEM_ERROR as i32,
+    SystemError = rtaudio_sys::RTAUDIO_ERROR_SYSTEM_ERROR,
     /// A thread error occurred.
-    ThreadError = rtaudio_sys::RTAUDIO_ERROR_THREAD_ERROR as i32,
+    ThreadError = rtaudio_sys::RTAUDIO_ERROR_THREAD_ERROR,
 }
 
 impl RtAudioErrorType {
