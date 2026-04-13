@@ -263,9 +263,6 @@ impl StreamHandle {
                 })
         };
 
-        dbg!(&output_params);
-        dbg!(&input_params);
-
         // Safety: We have pinned the `cb_context_ptr` pointer in place,
         // `cb_context_ptr` is a member field of this struct, and the stream
         // is automatically stopped when this struct is dropped, so
